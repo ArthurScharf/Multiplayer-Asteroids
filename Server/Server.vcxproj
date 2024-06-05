@@ -21,7 +21,7 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{bc68badc-eae5-4674-8759-6ea86037f54f}</ProjectGuid>
+    <ProjectGuid>{C5523649-32B8-40E6-A623-4BDFD2D27291}</ProjectGuid>
     <RootNamespace>Asteroids</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
     <ProjectName>Server</ProjectName>

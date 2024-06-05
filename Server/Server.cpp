@@ -33,7 +33,6 @@ int main()
 		std::cout << "Status: " << wsaData.szSystemStatus << std::endl;
 	}
 
-	
 	// -- 2. Create the socket -- //
 	SOCKET serverSocket = INVALID_SOCKET;
 	serverSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -48,7 +47,6 @@ int main()
 		std::cout << "socket() OK" << std::endl;
 	}
 
-	
 	// -- 3. Binding Server to Address -- //
 	sockaddr_in socketInitializer;
 	socketInitializer.sin_family = AF_INET;
@@ -65,6 +63,7 @@ int main()
 	{
 		std::cout << "bind() OK" << std::endl;
 	}
+
 
 
 	// -- Sending and Receiving Data -- //
@@ -89,3 +88,5 @@ int main()
 	WSACleanup();
 	return 0;
 };
+
+
