@@ -1,0 +1,76 @@
+OpenGL Rendering
+ - GLFW (OpenGL implementation)
+ - GLAD (OpenGL function definitions)
+ - GLM  (OpenGL Math)
+ - Assimp (Loading FBX Files for models)
+
+WinSock for networking
+ - Chat Feature
+ - Replication
+    - The server sends instructions to clients to spawn asteroids
+    - The clients send their instructions to the server for character movement
+    - The server implements player instructions, progresses asteroids and projectiles, then replicates
+      these values back to the client.
+    - Client side movement prediction (Stretch goal)
+
+Collision Detection Solution
+ - Each frame all objects are hashed into a 2d hashmap O(n)
+ - Hash function --> object.xy coordinates rounded to closest value of R
+ - R = Largest possible radial distance possible without collision
+	- R = Player ship radius size + Asteroid size
+ - Once objects are hashed, we check adjacent squares to each ship location. If asteroid occupies current ship square,
+   OR occupies square adjacent to ship square, we calculate distance. If distance has collision, we collide
+ - This algorithm is repeated for projectiles on the screen, comparing to asteroids for collision
+
+Animation Solution
+ - Asteroids will rotate around a random axis for their duration.
+ - Ships will rotate so long as a turn key is held by a player
+ - Ships will interp a ROLL to a max value while turning. (Stretch goal)
+
+Menu Solution
+ - We're going to avoid this for now. The server will only begin play when two players are connected.
+   Once a player's connection is established, they see the game with only their ship. Once both player's have
+   connected, we can begin having them move around
+
+
+
+
+
+---------- Feature Order ----------
+0. Figure out how to get the chat room working over the LAN
+1. Build the server to be able to receive client connection and to replicate a vector back to the client
+2. Build the rendering pipeline for the client. Have the pipeline replicate movement
+3. Predictive movement for player ships. Asteroids lifespans and collision are server authority, but each client instances
+   are handled by the client with respect to movement and animation
+4. Extend replication to include gameplay features like asteroids, projectiles, and so on
+
+
+
+
+
+---------- Code Design ----------
+Since OpenGL is built to create a window and to handle input, OpenGL's input processing will be our program's
+entrypoint for processing input
+
+Question: How do I handle the difference between the frequency at which the server is replicating data, 
+          and the processing speed of each computer? Obviously deltaTime handles the difference between processing speed,
+          but what about the rate at which data is replicated?
+Answer: This is what ping is. Games handle ping problems by removing players with terrible ping from games,
+        so they don't ruin the experience of other players
+
+game loop
+ 1. Collision
+ 2. Rendering
+
+
+The server address is assigned in the code. Therefore, the client will always know where to connect to
+
+
+
+// Reserved for LAN networks //
+    10.0.0.0        -   10.255.255.255  (10/8 prefix)
+    172.16.0.0      -   172.31.255.255  (172.16/12 prefix)
+    192.168.0.0     -   192.168.255.255 (192.168/16 prefix)
+
+
+
