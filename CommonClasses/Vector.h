@@ -20,20 +20,20 @@ public:
 	/* Normalizes the vector 
 	Is ternary operator the best way to check for 0?
 	*/
-	Vector3D& Normalize()
+	void Normalize()
 	{
 		float magnitude = sqrt((x * x) + (y * y) + (z * z));
 		if (magnitude == 0) return; // magnitude is only 0 if all values are 0
 		x /= magnitude;
 		y /= magnitude;
 		z /= magnitude;
-		return *this; // Cascading
+		// return this; // Cascading
 	}
 
 	std::string toString()
 	{
 		char buffer[50]{};
-		sprintf_s(buffer, 50, "%6.2f %6.2f %6.2f", x, y, z);
+		sprintf_s(buffer, 50, "%4.2f %4.2f %4.2f", x, y, z);
 		return std::string(buffer);
 	}
 

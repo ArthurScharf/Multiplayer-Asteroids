@@ -3,6 +3,7 @@
 #include <functional>
 #include <map>
 #include <string>
+
 #include "../Actor.h"
 #include "Serializeable.h"
 
@@ -41,27 +42,29 @@ class Factory;
 class ActorFactory;
 
 
-
 class Deserializer
 {
-	static Serializable* deserialize(const char* buffer)
-	{
-		int typeId = *buffer; // Scheme --> First bit is the type id
 
-		switch(typeId)
+	/*
+	* Each buffer is packaged by by type. This makes unpacking easier
+	*/
+	static void deserialize(const char* buffer, unsigned int bufferLen)
+	{
+		unsigned int bufferTypeId = *buffer++; // Scheme --> First bit is the type id
+		if (bufferTypeId == 0) // Instruction
 		{
-		case 0: // Instruction	
-		break;
-		case 1: // Actor
-			
-		break;
-		};
+
+		}
+		else if (bufferTypeId == 1) // Actor Update
+		{
+			for (unsigned int i = 0; i < bufferLen - 1; i++)
+			{
+				unsigned int actorId = *(++buffer); // Retreiving the actor ID
+
+			}
+		}
 	}
 };
 
 
 
-class Factory
-{
-
-};

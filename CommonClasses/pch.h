@@ -10,4 +10,10 @@
 // add headers that you want to pre-compile here
 #include "framework.h"
 
+
+#include "Actor.h"
+#include "Vector.h"
+#include "Serialization/Serializeable.h"
+#include "Serialization//Serializer.h"
+
 #endif //PCH_H

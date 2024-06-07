@@ -3,32 +3,50 @@
 #include "Vector.h"
 #include "Serialization/Serializeable.h"
 
-static unsigned int NextID;
+
+
+/* ID's are shared across the network */
+static unsigned int nextId;
 
 /*
 * This actor class implements the networking interface
 */
-class Actor : public Serializable
+class Actor
 {
 // -- Members -- //
 private:
-	Vector3D Position;
-	Vector3D Rotation; // Should be a rotator. For now, is a
+	unsigned int id; // 4
+	Vector3D Position; // 12
+	Vector3D Rotation; // Should be a rotator. For now, is a Vector3D
 	//Mesh mesh; TODO 
 
 // -- Methods, Constructors, Destructors -- //
 public:
-	Actor(Vector3D position, Vector3D rotation) : Position(position), Rotation(rotation) {};
-	/* Serializes this objects network required data */
-	int serialize(const char* buffer) const override;
+	Actor(Vector3D position, Vector3D rotation); // Server side
+	Actor(Vector3D position, Vector3D rotation, unsigned int replicatedId); // Client side
+	static unsigned int serialize(char* buffer, Actor* actor);
+	/*
+	* The signature is different than serialize because we want to instantiate an actor internally.
+	* If we allowed the return actor to be a parameter, we allow a user to pass any kind of actor pointer,
+	* which run's it's own selection of issues
+	*/
+	static Actor* deserialize(char* buffer, unsigned int& bytesRead); 
 
-	Actor* deserialize(const char* buffer) override;
-	
+// --  Getters and Setters -- //
 public:
-	// --  Getters and Setters -- //
+	unsigned int getId() { return id; }
+
 	inline Vector3D getPosition() { return Position; }
-	inline void setPosition(Vector3D position) { Position = position.Normalize(); }
+	inline void setPosition(Vector3D position) 
+	{
+		position.Normalize();
+		Position = position;
+	}
 
 	inline Vector3D getRotation() { return Rotation; }
-	inline void setRotation(Vector3D rotation) { Rotation = rotation.Normalize(); }
+	inline void setRotation(Vector3D rotation)
+	{
+		rotation.Normalize();
+		Rotation = rotation;
+	}
 };

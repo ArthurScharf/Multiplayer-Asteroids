@@ -8,6 +8,7 @@
 #include <tchar.h> // _T
 #include <thread>
 
+#include "../CommonClasses/Actor.h"
 #include "../CommonClasses/Vector.h"
 #include "../CommonClasses/Serialization/Serializer.h"
 
@@ -36,7 +37,23 @@ void terminate();
 */
 // ---- CLIENT ---- //
 int main()
-{
+{	
+	Actor* actor = new Actor(Vector3D(1.f, 1.f, 1.f), Vector3D(0.f), 314);
+	std::cout << "ID:" << actor->getId() << " / Pos:" << actor->getPosition().toString() << " / Rot: " << actor->getRotation().toString() << std::endl;
+
+	char* buffer = new char[sizeof(Actor)];
+	unsigned int bytesStored = Actor::serialize(buffer, actor);
+	// std::cout << "bytes stored: " << bytesStored << std::endl;
+	
+	delete actor;
+	actor = Actor::deserialize(buffer, bytesStored);
+	//std::cout << "bytes read: " << bytesStored << std::endl;
+	std::cout << "ID: " << actor->getId() << "/Pos: " << actor->getPosition().toString() << "/ Rot: " << actor->getRotation().toString() << std::endl;
+
+	
+
+	return 0;
+	/**/
 
 	// ---------- OpenGL ---------- //
 	glfwInit();
@@ -103,7 +120,10 @@ int main()
 	}
 
 
-	// -- 3. Receive Messages -- //
+	// ToDo: Start seperate thread to receive data from server.
+
+
+	// -- 3. Sending Messages -- //
 	sockaddr_in serverAddr;
 	serverAddr.sin_family = AF_INET;
 	InetPtonW(AF_INET, _T("192.168.2.74"), &serverAddr.sin_addr.s_addr);
@@ -114,10 +134,11 @@ int main()
 
 		std::cout << position.toString() << std::endl;
 
+
+		// ToDo: Construct client status buffer
+		// Update: Remember to set first byte in buffer with buffer type
 		char buffer[200]{};
 		// sprintf_s(buffer, "%6.5f %6.5f %6.5f", position.x, position.y, position.z);
-
-
 
 		int bytesSent = sendto(clientSocket, (const char*)buffer, strlen(buffer), 0, (SOCKADDR*)&serverAddr, sizeof(serverAddr));
 		if (!bytesSent)
