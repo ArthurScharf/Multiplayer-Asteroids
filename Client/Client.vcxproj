@@ -108,7 +108,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>/Client/Includes;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>/Client/Includes;C:\Users\User\source\repos\Multiplayer-Asteroids\CommonClassesC:\Users\User\source\repos\Multiplayer-Asteroids\CommonClasses;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -136,6 +136,11 @@
   <ItemGroup>
     <ClCompile Include="Client.cpp" />
     <ClCompile Include="Rendering\glad.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\CommonClasses\CommonClasses.vcxproj">
+      <Project>{3ae1058e-d4c7-431e-ba8a-a0db3c2c2c7b}</Project>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -1,7 +1,11 @@
 #pragma once
 #include <math.h>
+#include <string>
 
 
+/*
+* Should probably be a struct
+*/
 class Vector3D
 {
 public:
@@ -23,14 +27,20 @@ public:
 		x /= magnitude;
 		y /= magnitude;
 		z /= magnitude;
-	};
+		// return this; // Cascading
+	}
 
 	std::string toString()
 	{
 		char buffer[50]{};
-		sprintf_s(buffer, 50, "%6.5f %6.5f %6.5f", x, y, z);
+		sprintf_s(buffer, 50, "%4.2f %4.2f %4.2f", x, y, z);
 		return std::string(buffer);
 	}
+
+
+
+	/* Serializes all data members to be sent over the network */
+	// void NetSerialize(); 
 
 	// TODO: order these in order the order in which they operate. As an exercise
 	Vector3D operator+(Vector3D& other) { return Vector3D(x + other.x, y + other.y, z + other.z); }

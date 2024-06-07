@@ -67,10 +67,35 @@ The server address is assigned in the code. Therefore, the client will always kn
 
 
 
-// Reserved for LAN networks //
-    10.0.0.0        -   10.255.255.255  (10/8 prefix)
-    172.16.0.0      -   172.31.255.255  (172.16/12 prefix)
-    192.168.0.0     -   192.168.255.255 (192.168/16 prefix)
+----- Entities & Networking -----
+Network must receive connection and notify client that other client has 
+connected.
+Things that must be sent over the network
+ Player's existence
+ Player positions
+ Existence of projectiles (see player existence)
+ 
+ All of this data is entity data. 
+
+ Idea: Each time the server replicates, it sends a json object filled with
+       the data for each entity. The client must check to see if 
+       we see new entities. If we do, we spawn that entity
+
+Common Entity Data
+ Position
+ Rotation
+ Velocity
+
+Client to Server Data
+ Input
 
 
 
+The client has an actor ID stored which represents the player character.
+
+When a client joins the game, is sent the ID for it's character, so it can
+set it. Actoring rendering is done agnostic to which character is the
+player character.
+
+Whenever the client detects an ID for a character is does not yet have,
+it spawns that actor.

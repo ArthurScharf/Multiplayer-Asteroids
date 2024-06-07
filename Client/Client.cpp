@@ -8,29 +8,45 @@
 #include <tchar.h> // _T
 #include <thread>
 
-
+#include "../CommonClasses/Actor.h"
 #include "../CommonClasses/Vector.h"
+#include "../CommonClasses/Serialization/Serializer.h"
 
-#pragma comment(lib, "ws2_32.lib")
-
+#pragma comment(lib, "ws2_32.lib") // What is this doing?
 
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
 bool bWinsockLoaded = false;
 
-//Vector3D position(5.f, 3.f, 11.f);
-Vector3D position;
+Vector3D position; // Player position. A temporary place for this. Will probably go into an Actor class later on
 const float playerSpeed = 25.f; // The rate at which the player changes position
 
+Actor* actors;
+// The actor controlled by the client
+Actor* playerActor;
 
-void Terminate();
+// -- Forward Declaring Functions -- //
 void processInput(GLFWwindow* window);
+void terminate();
 
 
+
+/* It is the job of the client's main code to organize and denote the structure
+*  Of the serialized data being sent. In other words, it must
+*  organize the serialized actors and instructions with the same custom protocol
+*  that the server does
+*/
 // ---- CLIENT ---- //
 int main()
 {
+	// ---------- Game State ---------- //
+	playerActor = new Actor(
+		Vector3D(0.f),
+		Vector3D(0.f)
+	);
+
+
 
 	// ---------- OpenGL ---------- //
 	glfwInit();
@@ -54,15 +70,14 @@ int main()
 	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
 	{
 		std::cout << "Failed to initialize GLAD" << std::endl;
-		Terminate();
+		terminate();
 		return 0;
 	}
 
-
-
+	
 
 	// ---------- Networking ---------- //
-	// -- 1. Load the DL -- //
+	// -- 1. Load the DLL -- //
 	int error = 0;
 	WORD wVersionRequested = MAKEWORD(2, 2);
 	WSADATA wsaData;
@@ -89,7 +104,7 @@ int main()
 	if (clientSocket == INVALID_SOCKET)
 	{
 		std::cout << "Error at socket(): " << WSAGetLastError() << std::endl;
-		Terminate();
+		terminate();
 		return 0;
 	}
 	else
@@ -97,6 +112,11 @@ int main()
 		std::cout << "socket() OK" << std::endl;
 	}
 
+
+	// ToDo: Start seperate thread to receive data from server.
+
+
+	// -- 3. Sending Messages -- //
 	sockaddr_in serverAddr;
 	serverAddr.sin_family = AF_INET;
 	InetPtonW(AF_INET, _T("192.168.2.74"), &serverAddr.sin_addr.s_addr);
@@ -105,15 +125,18 @@ int main()
 	{
 		processInput(window);
 
-		std::cout << position.toString() << std::endl;
+		/* Since recvfrom isn't blocking, we can do the recv code in here */
 
-		char buffer[200]{};
-		sprintf_s(buffer, "%6.1f %6.1f %6.1f", position.x, position.y, position.z);
-		int bytesSent = sendto(clientSocket, (const char*)buffer, strlen(buffer), 0, (SOCKADDR*)&serverAddr, sizeof(serverAddr));
+
+		// ToDo: Construct client status buffer
+		// Update: Remember to set first byte in buffer with buffer type
+		char buffer[sizeof(Actor)];
+		Actor::serialize(buffer, playerActor);
+		int bytesSent = sendto(clientSocket, (const char*)buffer, sizeof(Actor), 0, (SOCKADDR*)&serverAddr, sizeof(serverAddr));
 		if (!bytesSent)
 		{
-			std::cout << "Error transmitting data" << std::endl;
-			Terminate();
+			std::cout << "Error transmitting data: " <<  WSAGetLastError() << std::endl;
+			terminate();
 			return 0;
 		}
 		
@@ -121,7 +144,7 @@ int main()
 		glfwSwapBuffers(window);
 	}
 
-	Terminate();
+	terminate();
 	return 0;
 };
 
@@ -142,11 +165,11 @@ void processInput(GLFWwindow* window)
 		movementDir += Vector3D(-1.f, 0.f, 0.f);
 
 	movementDir.Normalize();
-	position = position + (movementDir * playerSpeed);
+	playerActor->setPosition(playerActor->getPosition() + (movementDir * playerSpeed));
 }
 
 
-void Terminate()
+void terminate()
 {
 	if (bWinsockLoaded) WSACleanup();
 	glfwTerminate();
