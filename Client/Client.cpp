@@ -22,7 +22,9 @@ bool bWinsockLoaded = false;
 Vector3D position; // Player position. A temporary place for this. Will probably go into an Actor class later on
 const float playerSpeed = 25.f; // The rate at which the player changes position
 
-
+Actor* actors;
+// The actor controlled by the client
+Actor* playerActor;
 
 // -- Forward Declaring Functions -- //
 void processInput(GLFWwindow* window);
@@ -37,23 +39,14 @@ void terminate();
 */
 // ---- CLIENT ---- //
 int main()
-{	
-	Actor* actor = new Actor(Vector3D(1.f, 1.f, 1.f), Vector3D(0.f), 314);
-	std::cout << "ID:" << actor->getId() << " / Pos:" << actor->getPosition().toString() << " / Rot: " << actor->getRotation().toString() << std::endl;
+{
+	// ---------- Game State ---------- //
+	playerActor = new Actor(
+		Vector3D(0.f),
+		Vector3D(0.f)
+	);
 
-	char* buffer = new char[sizeof(Actor)];
-	unsigned int bytesStored = Actor::serialize(buffer, actor);
-	// std::cout << "bytes stored: " << bytesStored << std::endl;
-	
-	delete actor;
-	actor = Actor::deserialize(buffer, bytesStored);
-	//std::cout << "bytes read: " << bytesStored << std::endl;
-	std::cout << "ID: " << actor->getId() << "/Pos: " << actor->getPosition().toString() << "/ Rot: " << actor->getRotation().toString() << std::endl;
 
-	
-
-	return 0;
-	/**/
 
 	// ---------- OpenGL ---------- //
 	glfwInit();
@@ -132,18 +125,17 @@ int main()
 	{
 		processInput(window);
 
-		std::cout << position.toString() << std::endl;
+		/* Since recvfrom isn't blocking, we can do the recv code in here */
 
 
 		// ToDo: Construct client status buffer
 		// Update: Remember to set first byte in buffer with buffer type
-		char buffer[200]{};
-		// sprintf_s(buffer, "%6.5f %6.5f %6.5f", position.x, position.y, position.z);
-
-		int bytesSent = sendto(clientSocket, (const char*)buffer, strlen(buffer), 0, (SOCKADDR*)&serverAddr, sizeof(serverAddr));
+		char buffer[sizeof(Actor)];
+		Actor::serialize(buffer, playerActor);
+		int bytesSent = sendto(clientSocket, (const char*)buffer, sizeof(Actor), 0, (SOCKADDR*)&serverAddr, sizeof(serverAddr));
 		if (!bytesSent)
 		{
-			std::cout << "Error transmitting data" << std::endl;
+			std::cout << "Error transmitting data: " <<  WSAGetLastError() << std::endl;
 			terminate();
 			return 0;
 		}
@@ -173,7 +165,7 @@ void processInput(GLFWwindow* window)
 		movementDir += Vector3D(-1.f, 0.f, 0.f);
 
 	movementDir.Normalize();
-	position = position + (movementDir * playerSpeed);
+	playerActor->setPosition(playerActor->getPosition() + (movementDir * playerSpeed));
 }
 
 

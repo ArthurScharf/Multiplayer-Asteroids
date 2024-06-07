@@ -91,3 +91,11 @@ Client to Server Data
 
 
 
+The client has an actor ID stored which represents the player character.
+
+When a client joins the game, is sent the ID for it's character, so it can
+set it. Actoring rendering is done agnostic to which character is the
+player character.
+
+Whenever the client detects an ID for a character is does not yet have,
+it spawns that actor.

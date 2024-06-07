@@ -5,6 +5,7 @@
 #include <tchar.h> // _T
 #include <thread>
 
+#include "Actor.h"
 #include "../CommonClasses/Vector.h"
 
 #pragma comment(lib, "ws2_32.lib")
@@ -79,9 +80,14 @@ int main()
 			WSACleanup();
 			return 0;
 		}
-
-		printf("%s\n", receiveBuffer);
-
+		if (bytesReceived > 0)
+		{
+			std::cout << "hello world" << std::endl;
+			unsigned int bytesRead;
+			Actor* receivedActor = Actor::deserialize(receiveBuffer, bytesRead);
+			std::cout << receivedActor->toString() << std::endl;
+		}
+		
 	};
 
 
