@@ -4,6 +4,8 @@
 
 #pragma comment(lib, "ws2_32.lib")
 
+#define BUFFER_SIZE 200
+
 class UDPSocket
 {
 private:
@@ -12,6 +14,11 @@ private:
 public:
 	int init();
 
+	void sendData(const char* buffer, unsigned int bufferLen);
 
-
+	/*
+	* returns bytes read.
+	* 
+	*/
+	const char* recvData(int& numBytesRead, sockaddr_in& sendingSockAddr);
 };

@@ -7,7 +7,7 @@
 #pragma comment(lib, "ws2_32.lib")
 
 
-//  UDPSocket::
+
 int UDPSocket::init()
 {
 	// -- 1. Load the DLL -- //
@@ -44,75 +44,53 @@ int UDPSocket::init()
 	}
 
 	// -- 3. Binding Socket to Address -- //
-	// - 3.1 Retreiving device LAN IP address - //
+	// Retreiving device LAN IP address
 	addrinfo hints, *res, *p;
 	int status;
-	char ipstr[INET6_ADDRSTRLEN];
+	char ipstr[INET_ADDRSTRLEN];
 
 	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_UNSPEC;
-	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_family = AF_INET;
+	hints.ai_socktype = SOCK_DGRAM;
 	hints.ai_flags = AI_PASSIVE; // pNodeName will be set to `localIPAddress`, we'll receive our computer's IP address on our LAN
 	
 	/* One or both of the first params MUST be NULL.
 	* Otherwise, there isn't any point in calling a function 
 	* to list options
 	*/
-	if ((status = getaddrinfo("", NULL, &hints, &res)) != 0)
+	if ((status = getaddrinfo("", "6969", &hints, &res)) != 0)
 	{
 		// printf("%s", gai_strerror(status));
 		return -1;
 	}
-	
-	for (p = res; p != NULL; p = p->ai_next)
+
+	// Binding
+	if (bind(sock, res->ai_addr, res->ai_addrlen) == SOCKET_ERROR)
 	{
-		void* addr;
-		const char* ipver;
-
-		// get the pointer to the address itself
-		if (p->ai_family == AF_INET) // IPv4
-		{
-			struct sockaddr_in* ipv4 = (struct sockaddr_in*)p->ai_addr;
-			addr = &(ipv4->sin_addr);
-			ipver = "IPv4";
-		}
-		else
-		{
-			struct sockaddr_in6* ipv6 = (struct sockaddr_in6*)p->ai_addr;
-			addr = &(ipv6->sin6_addr);
-			ipver = "IPv6";
-		}
-
-		inet_ntop(p->ai_family, addr, ipstr, sizeof(ipstr));
-		printf("  %s:  %s\n", ipver, ipstr);
-
-	}
-
-
-	freeaddrinfo(res);
-
-
-
-	return 0;
-
-	sockaddr_in socketInitializer;
-	socketInitializer.sin_family = AF_INET;
-	InetPtonW(AF_INET, _T("192.168.2.74"), &socketInitializer.sin_addr.s_addr);
-	socketInitializer.sin_port = htons(6969);
-	if (bind(sock, (SOCKADDR*)&socketInitializer, sizeof(socketInitializer)) == SOCKET_ERROR)
-	{
-		std::cout << "bind() failed: " << WSAGetLastError() << std::endl;
+		std::cout << "Server::bind() failed: " << WSAGetLastError() << std::endl;
 		closesocket(sock);
 		WSACleanup();
 		return 0;
 	}
 	else
 	{
-		std::cout << "bind() OK" << std::endl;
+		std::cout << "Server::bind() OK" << std::endl;
 	}
+
+	freeaddrinfo(res);
 };
 
 
-/*
 
-*/
+void UDPSocket::sendData(const char* buffer, unsigned int bufferLen)
+{
+
+}
+
+const char* UDPSocket::recvData(int& numBytesRead, sockaddr_in& sendingSockAddr)
+{
+	char buffer[BUFFER_SIZE];
+	int sockAddr_len = sizeof(sendingSockAddr);
+	numBytesRead = recvfrom(sock, buffer, BUFFER_SIZE, 0, (SOCKADDR*)&sendingSockAddr, &sockAddr_len);
+	return buffer;
+}
