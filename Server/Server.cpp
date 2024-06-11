@@ -5,8 +5,7 @@
 #include <tchar.h> // _T
 #include <thread>
 
-
-#include "Actor.h"
+#include "../CommonClasses/Actor.h"
 #include "../CommonClasses/Vector.h"
 #include "../CommonClasses/UDPSocket.h"
 
@@ -16,7 +15,6 @@
 
 
 #define MAX_CLIENTS 4
-
 
 
 /*
@@ -32,10 +30,6 @@ void handleNewClient(unsigned int newClientIPAddress);
 int main()
 {
 	
-	
-
-
-
 
 	UDPSocket localSocket;
 	localSocket.init();
