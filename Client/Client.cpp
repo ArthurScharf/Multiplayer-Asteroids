@@ -113,10 +113,28 @@ int main()
 	}
 
 
+	// -- 3. Binding Socket -- //
+	sockaddr_in socketInitializer;
+	socketInitializer.sin_family = AF_INET;
+
+	InetPtonW(AF_INET, _T("192.168.2.74"), &socketInitializer.sin_addr.s_addr);
+	socketInitializer.sin_port = htons(4242); // port 4242 is the client port. I'm doing this to avoid a server and client that are running on the same machine from conflicting with one another
+	if (bind(clientSocket, (SOCKADDR*)&socketInitializer, sizeof(socketInitializer)) == SOCKET_ERROR)
+	{
+		std::cout << "bind() failed: " << WSAGetLastError() << std::endl;
+		closesocket(clientSocket);
+		WSACleanup();
+		return 0;
+	}
+	else
+	{
+		std::cout << "bind() OK" << std::endl;
+	}
+
 	// ToDo: Start seperate thread to receive data from server.
 
 
-	// -- 3. Sending Messages -- //
+	// -- 4. Sending & Receiving Messages -- //
 	sockaddr_in serverAddr;
 	serverAddr.sin_family = AF_INET;
 	InetPtonW(AF_INET, _T("192.168.2.74"), &serverAddr.sin_addr.s_addr);

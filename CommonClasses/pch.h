@@ -15,5 +15,6 @@
 #include "Vector.h"
 #include "Serialization/Serializeable.h"
 #include "Serialization//Serializer.h"
+#include "UDPSocket.h"
 
 #endif //PCH_H

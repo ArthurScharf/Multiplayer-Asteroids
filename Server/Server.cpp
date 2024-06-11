@@ -5,15 +5,48 @@
 #include <tchar.h> // _T
 #include <thread>
 
+
 #include "Actor.h"
 #include "../CommonClasses/Vector.h"
+#include "../CommonClasses/UDPSocket.h"
 
+
+// Linking (What does this have to do with linking????
 #pragma comment(lib, "ws2_32.lib")
+
+
+#define MAX_CLIENTS 4
+
+
+
+/*
+* Stores the client IP 
+* instantiates a client actor.
+* Sends a message with the newly created actor's ID so the client knows
+* which Actor it's controlling
+*/
+void handleNewClient(unsigned int newClientIPAddress);
 
 
 // ---- SERVER ---- //
 int main()
 {
+	
+	
+
+
+
+
+	UDPSocket localSocket;
+	localSocket.init();
+
+
+	std::cin.get();
+
+	return 0;
+
+	unsigned long clientIPAddresses[MAX_CLIENTS]{};
+	unsigned int numClients = 0;
 
 	// -- 1. Load the DLL -- //
 	int error = 0;
@@ -80,6 +113,19 @@ int main()
 			WSACleanup();
 			return 0;
 		}
+
+
+		for (unsigned int i = 0; i < MAX_CLIENTS; i++)
+		{
+			if (clientIPAddresses[i] == clientAddr.sin_addr.s_addr);
+			{
+
+				break;
+			}
+		}
+		
+
+
 		if (bytesReceived > 0)
 		{
 			std::cout << "hello world" << std::endl;
@@ -91,8 +137,13 @@ int main()
 	};
 
 
+
 	WSACleanup();
 	return 0;
 };
 
 
+void handleNewClient(unsigned int newClientIPAddress)
+{
+
+}
