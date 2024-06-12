@@ -9,6 +9,7 @@
 #include <thread>
 
 #include "../CommonClasses/Actor.h"
+#include "../CommonClasses/UDPSocket.h"
 #include "../CommonClasses/Vector.h"
 #include "../CommonClasses/Serialization/Serializer.h"
 
@@ -26,9 +27,10 @@ Actor* actors;
 // The actor controlled by the client
 Actor* playerActor;
 
+
 // -- Forward Declaring Functions -- //
 void processInput(GLFWwindow* window);
-void terminate();
+void terminate(int exitCode);
 
 
 
@@ -40,13 +42,12 @@ void terminate();
 // ---- CLIENT ---- //
 int main()
 {
+
 	// ---------- Game State ---------- //
 	playerActor = new Actor(
 		Vector3D(0.f),
 		Vector3D(0.f)
 	);
-
-
 
 	// ---------- OpenGL ---------- //
 	glfwInit();
@@ -71,74 +72,43 @@ int main()
 	{
 		std::cout << "Failed to initialize GLAD" << std::endl;
 		terminate();
-		return 0;
 	}
 
 	
 
 	// ---------- Networking ---------- //
-	// -- 1. Load the DLL -- //
-	int error = 0;
-	WORD wVersionRequested = MAKEWORD(2, 2);
-	WSADATA wsaData;
-	error = WSAStartup(
-		wVersionRequested,
-		&wsaData
-	);
-	if (error != 0)
+	UDPSocket sock;
+	if (sock.init(false) != 0); // Initializes the socket to the LAN IP on port 4242
 	{
-		std::cout << "Winsock DLL not found" << std::endl;
-		return 0;
-	}
-	else
-	{
-		std::cout << "Winsock DLL found" << std::endl;
-		std::cout << "Status: " << wsaData.szSystemStatus << std::endl;
-		bWinsockLoaded = true;
-	}
-
-
-	// -- 2. Create the socket -- //
-	SOCKET clientSocket = INVALID_SOCKET;
-	clientSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-	if (clientSocket == INVALID_SOCKET)
-	{
-		std::cout << "Error at socket(): " << WSAGetLastError() << std::endl;
+		std::cout << "main -- failed to init socket" << std::endl;
 		terminate();
-		return 0;
-	}
-	else
-	{
-		std::cout << "socket() OK" << std::endl;
 	}
 
 
-	// -- 3. Binding Socket -- //
-	sockaddr_in socketInitializer;
-	socketInitializer.sin_family = AF_INET;
 
-	InetPtonW(AF_INET, _T("192.168.2.74"), &socketInitializer.sin_addr.s_addr);
-	socketInitializer.sin_port = htons(4242); // port 4242 is the client port. I'm doing this to avoid a server and client that are running on the same machine from conflicting with one another
-	if (bind(clientSocket, (SOCKADDR*)&socketInitializer, sizeof(socketInitializer)) == SOCKET_ERROR)
-	{
-		std::cout << "bind() failed: " << WSAGetLastError() << std::endl;
-		closesocket(clientSocket);
-		WSACleanup();
-		return 0;
-	}
-	else
-	{
-		std::cout << "bind() OK" << std::endl;
-	}
+
+	/* Properly formatting received IP address string and placing it in sockaddr_in struct */
+	sockaddr_in serverAddr;
+	char serverAddrStr[INET_ADDRSTRLEN];
+	std::cout << "Enter server IP address: ";
+	std::cin.getline(serverAddrStr, INET_ADDRSTRLEN);
+	
+	int wideStrLen = MultiByteToWideChar(CP_ACP, 0, serverAddrStr, -1, nullptr, 0);
+	
+	WCHAR* wideStr = new WCHAR[wideStrLen];
+	
+	MultiByteToWideChar(CP_ACP, 0, serverAddrStr, -1, wideStr, wideStrLen);
+
+	PCWSTR str(wideStr);
+
+	InetPtonW( AF_INET, str, &(serverAddr.sin_addr) );
+
+
 
 	// ToDo: Start seperate thread to receive data from server.
 
 
 	// -- 4. Sending & Receiving Messages -- //
-	sockaddr_in serverAddr;
-	serverAddr.sin_family = AF_INET;
-	InetPtonW(AF_INET, _T("192.168.2.74"), &serverAddr.sin_addr.s_addr);
-	serverAddr.sin_port = htons(6969);
 	while (!glfwWindowShouldClose(window))
 	{
 		processInput(window);
@@ -150,13 +120,9 @@ int main()
 		// Update: Remember to set first byte in buffer with buffer type
 		char buffer[sizeof(Actor)];
 		Actor::serialize(buffer, playerActor);
-		int bytesSent = sendto(clientSocket, (const char*)buffer, sizeof(Actor), 0, (SOCKADDR*)&serverAddr, sizeof(serverAddr));
-		if (!bytesSent)
-		{
-			std::cout << "Error transmitting data: " <<  WSAGetLastError() << std::endl;
-			terminate();
-			return 0;
-		}
+		// sock.sendData(buffer, sizeof(Actor));
+
+
 		
 		glfwPollEvents();
 		glfwSwapBuffers(window);
