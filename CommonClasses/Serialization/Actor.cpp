@@ -26,44 +26,43 @@ unsigned int Actor::serialize(char* buffer, Actor* actor)
 {
 	unsigned int bufferLen = sizeof(Actor); // Null terminating
 	
-	std::cout << std::endl;
+	// std::cout << std::endl;
 
 	unsigned int actorId = actor->getId(); 
 	memcpy(buffer, &actorId, sizeof(unsigned int));
-	std::cout << "actorId: " << actorId << std::endl;
 	buffer += sizeof(unsigned int);
 
-	buffer -= sizeof(unsigned int);
-	unsigned int testId;
-	memcpy(&testId, buffer, sizeof(unsigned int));
-	std::cout << "testId: " << actorId << std::endl;
-	buffer += sizeof(unsigned int);
+	//std::cout << "actorId: " << actorId << std::endl;
+	//buffer -= sizeof(unsigned int);
+	//unsigned int testId;
+	//memcpy(&testId, buffer, sizeof(unsigned int));
+	//std::cout << "testId: " << actorId << std::endl;
+	//buffer += sizeof(unsigned int);
 
 	// Setting Position Bytes
 	Vector3D pos = actor->getPosition();
 	memcpy(buffer, &pos, sizeof(Vector3D));
 	buffer += sizeof(Vector3D);
-	std::cout << "pos: " << pos.toString() << std::endl;
 
-	buffer -= sizeof(float) * 3;
-	Vector3D testPos;
-	memcpy(&testPos, buffer, sizeof(Vector3D));
-	std::cout << "testPos: " << testPos.toString() << std::endl;
-	buffer += sizeof(Vector3D);
+	//std::cout << "pos: " << pos.toString() << std::endl;
+	//buffer -= sizeof(float) * 3;
+	//Vector3D testPos;
+	//memcpy(&testPos, buffer, sizeof(Vector3D));
+	//std::cout << "testPos: " << testPos.toString() << std::endl;
+	//buffer += sizeof(Vector3D);
 
 	// Setting Rotation Bytes
 	Vector3D rot = actor->getRotation();
 	memcpy(buffer, &rot, sizeof(Vector3D));
 	buffer += sizeof(Vector3D);
-	std::cout << "rot: " << rot.toString() << std::endl;
 
-	buffer -= sizeof(float) * 3;
-	Vector3D testRot;
-	memcpy(&testRot, buffer, sizeof(Vector3D));
-	buffer += sizeof(Vector3D);
-	std::cout << "testRot: " << testRot.toString() << std::endl;
-
-	std::cout << std::endl;
+	//std::cout << "rot: " << rot.toString() << std::endl;
+	//buffer -= sizeof(float) * 3;
+	//Vector3D testRot;
+	//memcpy(&testRot, buffer, sizeof(Vector3D));
+	//buffer += sizeof(Vector3D);
+	//std::cout << "testRot: " << testRot.toString() << std::endl;
+	//std::cout << std::endl;
 
 	return bufferLen;
 }

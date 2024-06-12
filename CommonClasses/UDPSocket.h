@@ -24,7 +24,6 @@ public:
 	*/
 	const char* recvData(int& numBytesRead, sockaddr_in& sendingSockAddr);
 	
-	void test();
 
 public:
 	inline const char* getIPv4() { return IPv4; }

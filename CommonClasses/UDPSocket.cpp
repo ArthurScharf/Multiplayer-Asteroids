@@ -72,7 +72,7 @@ int UDPSocket::init(bool bIsServer)
 	// -- Setting IPv4 -- //
 	sockaddr_in* sockAddr = (sockaddr_in*)(res->ai_addr); // Since memory in both is contiguous, we can cast it and it'll populate correctly??
 	addr = &sockAddr->sin_addr; // Why am I doing this?
-	inet_ntop(AF_INET, sockAddr, ipStr, sizeof(ipStr));
+	inet_ntop(AF_INET, &sockAddr->sin_addr, ipStr, sizeof(ipStr));
 	printf("socket IP: %s\n", ipStr);
 
 
@@ -95,62 +95,14 @@ int UDPSocket::init(bool bIsServer)
 };
 
 
-void UDPSocket::test()
-{
-	addrinfo hints, * res, * p;
-	int status;
-	char ipstr[INET6_ADDRSTRLEN];
-
-	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_UNSPEC; // AF_INET or AF_INET6 to force version
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_flags = AI_PASSIVE;
-
-	if ((status = getaddrinfo("", NULL, &hints, &res)) != 0) {
-		// fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(status));
-		std::cout << gai_strerror(status) << std::endl;
-		return;
-	}
-	
-
-	// printf("IP addresses for %s:\n\n", argv[1]);
-
-	for (p = res; p != NULL; p = p->ai_next) {
-		void* addr{};
-		char* ipver[5];
-
-		// get the pointer to the address itself,
-		// different fields in IPv4 and IPv6:
-		if (p->ai_family == AF_INET) { // IPv4
-			struct sockaddr_in* ipv4 = (struct sockaddr_in*)p->ai_addr;
-			addr = &(ipv4->sin_addr);
-			// strcpy_s(ipver, sizeof("IPv4"), "IPv4");
-		}
-		else { // IPv6
-			struct sockaddr_in6* ipv6 = (struct sockaddr_in6*)p->ai_addr;
-			addr = &(ipv6->sin6_addr);
-			// strcpy_s(ipver, sizeof("IPv6"), "IPv6");
-		}
-
-		// convert the IP to a string and print it:
-		inet_ntop(p->ai_family, addr, ipstr, sizeof ipstr);
-		printf("  %s: %s\n", ipver, ipstr);
-	}
-
-	freeaddrinfo(res); // free the linked list
-}
-
 
 void UDPSocket::sendData(const char* buffer, unsigned int bufferLen, sockaddr_in& recvAddr)
 {
-
-	// char buffer[BUFFER_SIZE];
-	
-	//sendto(
-	//	buffer,
-	//	BUFFER_SIZE,
-
-	//)
+	int bytesSent = sendto(sock, buffer, bufferLen, 0, (sockaddr*)&recvAddr, sizeof recvAddr);
+	if (bytesSent > 0)
+	{
+		printf("%d", bytesSent);
+	}
 	
 }
 

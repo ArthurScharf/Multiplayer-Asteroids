@@ -30,7 +30,7 @@ Actor* playerActor;
 
 // -- Forward Declaring Functions -- //
 void processInput(GLFWwindow* window);
-void terminate(int exitCode);
+void terminate();
 
 
 
@@ -85,27 +85,16 @@ int main()
 	}
 
 
-
-
 	/* Properly formatting received IP address string and placing it in sockaddr_in struct */
 	sockaddr_in serverAddr;
-	char serverAddrStr[INET_ADDRSTRLEN];
 	std::cout << "Enter server IP address: ";
-	std::cin.getline(serverAddrStr, INET_ADDRSTRLEN);
-	
-	int wideStrLen = MultiByteToWideChar(CP_ACP, 0, serverAddrStr, -1, nullptr, 0);
-	
-	WCHAR* wideStr = new WCHAR[wideStrLen];
-	
-	MultiByteToWideChar(CP_ACP, 0, serverAddrStr, -1, wideStr, wideStrLen);
-
-	PCWSTR str(wideStr);
-
+	wchar_t wServerAddrStr[INET_ADDRSTRLEN];
+	std::wcin >> wServerAddrStr;
+	PCWSTR str(wServerAddrStr);
 	InetPtonW( AF_INET, str, &(serverAddr.sin_addr) );
+	serverAddr.sin_port = htons(6969);
 
-
-
-	// ToDo: Start seperate thread to receive data from server.
+	
 
 
 	// -- 4. Sending & Receiving Messages -- //
@@ -120,9 +109,7 @@ int main()
 		// Update: Remember to set first byte in buffer with buffer type
 		char buffer[sizeof(Actor)];
 		Actor::serialize(buffer, playerActor);
-		// sock.sendData(buffer, sizeof(Actor));
-
-
+		sock.sendData(buffer, sizeof(Actor), serverAddr);
 		
 		glfwPollEvents();
 		glfwSwapBuffers(window);
