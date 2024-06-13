@@ -44,14 +44,16 @@ int main()
 	int clientAddr_len = sizeof(clientAddr);
 	while (true)
 	{
-		const char* buffer;
+		char* buffer = (char*)malloc(sizeof(Actor));
 		int numBytesRead;
 		buffer = sock.recvData(numBytesRead, clientAddr);
-		printf("%i\n", numBytesRead);
-		//if (numBytesRead > 0)
-		//{
-		//	printf("%s\n", buffer);
-		//}
+		if (numBytesRead > 0)
+		{
+			unsigned int _;
+			Actor* actor(Actor::deserialize(buffer, _));
+			std::cout << actor->toString() << "\n";
+			free(actor);
+		}
 	};
 
 	WSACleanup();

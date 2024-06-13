@@ -26,7 +26,7 @@ unsigned int Actor::serialize(char* buffer, Actor* actor)
 {
 	unsigned int bufferLen = sizeof(Actor); // Null terminating
 	
-	// std::cout << std::endl;
+	 std::cout << std::endl;
 
 	unsigned int actorId = actor->getId(); 
 	memcpy(buffer, &actorId, sizeof(unsigned int));
@@ -69,9 +69,9 @@ unsigned int Actor::serialize(char* buffer, Actor* actor)
 
 
 /* actor is an */
-Actor* Actor::deserialize(char* buffer, unsigned int& bytesRead)
+Actor* Actor::deserialize(const char* buffer, unsigned int& bytesRead)
 {
-	
+
 	// Actor id
 	unsigned int id;
 	memcpy(&id, buffer, sizeof(unsigned int));

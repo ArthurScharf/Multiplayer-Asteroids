@@ -22,7 +22,7 @@ public:
 	* returns bytes read.
 	* 
 	*/
-	const char* recvData(int& numBytesRead, sockaddr_in& sendingSockAddr);
+	char* recvData(int& numBytesRead, sockaddr_in& sendingSockAddr);
 	
 
 public:

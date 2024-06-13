@@ -71,7 +71,6 @@ int UDPSocket::init(bool bIsServer)
 
 	// -- Setting IPv4 -- //
 	sockaddr_in* sockAddr = (sockaddr_in*)(res->ai_addr); // Since memory in both is contiguous, we can cast it and it'll populate correctly??
-	addr = &sockAddr->sin_addr; // Why am I doing this?
 	inet_ntop(AF_INET, &sockAddr->sin_addr, ipStr, sizeof(ipStr));
 	printf("socket IP: %s\n", ipStr);
 
@@ -99,16 +98,12 @@ int UDPSocket::init(bool bIsServer)
 void UDPSocket::sendData(const char* buffer, unsigned int bufferLen, sockaddr_in& recvAddr)
 {
 	int bytesSent = sendto(sock, buffer, bufferLen, 0, (sockaddr*)&recvAddr, sizeof recvAddr);
-	if (bytesSent > 0)
-	{
-		printf("%d", bytesSent);
-	}
 	
 }
 
-const char* UDPSocket::recvData(int& numBytesRead, sockaddr_in& sendingSockAddr)
+char* UDPSocket::recvData(int& numBytesRead, sockaddr_in& sendingSockAddr)
 {
-	char buffer[BUFFER_SIZE];
+	char* buffer = (char*)malloc(BUFFER_SIZE);
 	int sockAddr_len = sizeof(sendingSockAddr);
 	numBytesRead = recvfrom(sock, buffer, BUFFER_SIZE, 0, (SOCKADDR*)&sendingSockAddr, &sockAddr_len);
 	return buffer;

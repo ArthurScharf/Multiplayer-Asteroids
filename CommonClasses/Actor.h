@@ -43,7 +43,7 @@ public:
 	* If we allowed the return actor to be a parameter, we allow a user to pass any kind of actor pointer,
 	* which run's it's own selection of issues
 	*/
-	static Actor* deserialize(char* buffer, unsigned int& bytesRead); 
+	static Actor* deserialize(const char* buffer, unsigned int& bytesRead); 
 
 // --  Getters and Setters -- //
 public:

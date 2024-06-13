@@ -49,6 +49,32 @@ int main()
 		Vector3D(0.f)
 	);
 
+
+	// ---------- Networking ---------- //
+	UDPSocket sock;
+	if (sock.init(false) != 0); // Initializes the socket to the LAN IP on port 4242
+	{
+		std::cout << "main -- failed to init socket" << std::endl;
+		//terminate();
+	}
+
+	/* Properly formatting received IP address string and placing it in sockaddr_in struct */
+	sockaddr_in serverAddr;
+	serverAddr.sin_family = AF_INET;
+	std::cout << "Enter server IP address: ";
+	wchar_t wServerAddrStr[INET_ADDRSTRLEN];
+	std::wcin >> wServerAddrStr;
+	PCWSTR str(wServerAddrStr);
+	InetPtonW(AF_INET, str, &(serverAddr.sin_addr));
+	serverAddr.sin_port = htons(6969);
+
+	// PROOF: We're storing the Server info correctly
+	char ip[INET6_ADDRSTRLEN];
+	inet_ntop(AF_INET, (sockaddr*)&serverAddr.sin_addr, ip, INET6_ADDRSTRLEN);
+	printf("IP: %s   Port: %d", &ip, ntohs(serverAddr.sin_port));
+
+
+
 	// ---------- OpenGL ---------- //
 	glfwInit();
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -76,23 +102,7 @@ int main()
 
 	
 
-	// ---------- Networking ---------- //
-	UDPSocket sock;
-	if (sock.init(false) != 0); // Initializes the socket to the LAN IP on port 4242
-	{
-		std::cout << "main -- failed to init socket" << std::endl;
-		terminate();
-	}
 
-
-	/* Properly formatting received IP address string and placing it in sockaddr_in struct */
-	sockaddr_in serverAddr;
-	std::cout << "Enter server IP address: ";
-	wchar_t wServerAddrStr[INET_ADDRSTRLEN];
-	std::wcin >> wServerAddrStr;
-	PCWSTR str(wServerAddrStr);
-	InetPtonW( AF_INET, str, &(serverAddr.sin_addr) );
-	serverAddr.sin_port = htons(6969);
 
 	
 
@@ -104,18 +114,30 @@ int main()
 
 		/* Since recvfrom isn't blocking, we can do the recv code in here */
 
-
 		// ToDo: Construct client status buffer
 		// Update: Remember to set first byte in buffer with buffer type
 		char buffer[sizeof(Actor)];
 		Actor::serialize(buffer, playerActor);
+
+		unsigned int bytesRead = 0;
+		Actor* actor(Actor::deserialize(buffer, bytesRead));
+
+		std::cout << actor->toString() << "\n";
+
+
 		sock.sendData(buffer, sizeof(Actor), serverAddr);
 		
+
+
 		glfwPollEvents();
 		glfwSwapBuffers(window);
 	}
 
 	terminate();
+
+	char temp[200];
+	std::cin >> temp;
+
 	return 0;
 };
 
