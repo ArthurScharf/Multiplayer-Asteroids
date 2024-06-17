@@ -5,6 +5,7 @@
 #include <string>
 
 #include "../Actor.h"
+#include "../Definitions.h"
 #include "Serializeable.h"
 
 

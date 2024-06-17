@@ -7,8 +7,10 @@
 #include <WS2tcpip.h> // inetPtons
 #include <tchar.h> // _T
 #include <thread>
+#include <map>
 
 #include "../CommonClasses/Actor.h"
+#include "../CommonClasses/Definitions.h"
 #include "../CommonClasses/UDPSocket.h"
 #include "../CommonClasses/Vector.h"
 #include "../CommonClasses/Serialization/Serializer.h"
@@ -23,14 +25,19 @@ bool bWinsockLoaded = false;
 Vector3D position; // Player position. A temporary place for this. Will probably go into an Actor class later on
 const float playerSpeed = 25.f; // The rate at which the player changes position
 
-Actor* actors;
-// The actor controlled by the client
-Actor* playerActor;
+// We need these here so updateActors can access them //
+//Actor* actors[MAX_PLAYERS]; // Allocates local memory for pointers to actor pointers
+std::map<unsigned int, Actor*> actorMap;
+Actor* playerActor = nullptr;
 
 
 // -- Forward Declaring Functions -- //
 void processInput(GLFWwindow* window);
-void terminate();
+void terminate_L();
+
+void updateActors(char* buffer, int bufferLen);
+
+void handleCommand(char* buffer, unsigned int bufferLen);
 
 
 
@@ -44,19 +51,12 @@ int main()
 {
 
 	// ---------- Game State ---------- //
-	playerActor = new Actor(
-		Vector3D(0.f),
-		Vector3D(0.f)
-	);
-
+	// playerActor = (Actor*)malloc(sizeof(Actor)); // The actor controlled by the client
+	playerActor = nullptr; // nullptr used to know if client is connected
 
 	// ---------- Networking ---------- //
 	UDPSocket sock;
-	if (sock.init(false) != 0); // Initializes the socket to the LAN IP on port 4242
-	{
-		std::cout << "main -- failed to init socket" << std::endl;
-		//terminate();
-	}
+	sock.init(false);
 
 	/* Properly formatting received IP address string and placing it in sockaddr_in struct */
 	sockaddr_in serverAddr;
@@ -69,9 +69,9 @@ int main()
 	serverAddr.sin_port = htons(6969);
 
 	// PROOF: We're storing the Server info correctly
-	char ip[INET6_ADDRSTRLEN];
-	inet_ntop(AF_INET, (sockaddr*)&serverAddr.sin_addr, ip, INET6_ADDRSTRLEN);
-	printf("IP: %s   Port: %d", &ip, ntohs(serverAddr.sin_port));
+	//char ip[INET6_ADDRSTRLEN];
+	//inet_ntop(AF_INET, (sockaddr*)&serverAddr.sin_addr, ip, INET6_ADDRSTRLEN);
+	// printf("IP: %s   Port: %d", &ip, ntohs(serverAddr.sin_port));
 
 
 
@@ -97,44 +97,61 @@ int main()
 	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
 	{
 		std::cout << "Failed to initialize GLAD" << std::endl;
-		terminate();
+		terminate_L();
 	}
 
-	
 
 
-
-	
-
+	std::cout << "Client.exe!main -- Beginning main loop\n";
 
 	// -- 4. Sending & Receiving Messages -- //
 	while (!glfwWindowShouldClose(window))
 	{
+		std::cout << "Client.exe!main -- Looping\n";
+		
 		processInput(window);
 
-		/* Since recvfrom isn't blocking, we can do the recv code in here */
 
-		// ToDo: Construct client status buffer
-		// Update: Remember to set first byte in buffer with buffer type
-		char buffer[sizeof(Actor)];
-		Actor::serialize(buffer, playerActor);
+		// Schema: First Actor in Buffer is always clients actor
+		// -- Receiving Data from Server -- //
+		int numBytesRead = 0;
+		sockaddr_in recvAddr;
+		char* recvBuffer{};
+		recvBuffer = sock.recvData(numBytesRead, recvAddr);
+		if (numBytesRead > 0) 
+		{
+			if (recvBuffer[0] == '0') // Command Received
+				handleCommand(++recvBuffer, numBytesRead); // We increment once before passing since the we don't need the 'command received' byte to be present
+			else if (recvBuffer[0] == '1') // Actor replication
+				updateActors(recvBuffer, numBytesRead);
+		}
 
-		unsigned int bytesRead = 0;
-		Actor* actor(Actor::deserialize(buffer, bytesRead));
-
-		std::cout << actor->toString() << "\n";
+		std::cout << "Client.exe!main -- processed received data\n";
 
 
-		sock.sendData(buffer, sizeof(Actor), serverAddr);
-		
-
+		// -- Sending Data to Server -- //
+		char sendBuffer[2 + (MAX_ACTORS * sizeof(Actor))]; // I doubt command data will ever exceed this size
+		// No player actor --> The server hasn't given us one yet; we're not connected
+		if (!playerActor)
+		{
+			//printf("main -- Connecting");
+			sendBuffer[0] = '0'; // Connect
+			sock.sendData(sendBuffer, 1, serverAddr);
+		}
+		else
+		{
+			//printf("main -- Replicating");
+			Actor::serialize(sendBuffer, playerActor); // static method so knows how large buffer SHOULD be.
+			sock.sendData(sendBuffer, sizeof(Actor), serverAddr);
+		}
 
 		glfwPollEvents();
 		glfwSwapBuffers(window);
 	}
 
-	terminate();
+	terminate_L();
 
+	// Prevents window from closing too quickly. Good so I can see print statements
 	char temp[200];
 	std::cin >> temp;
 
@@ -144,10 +161,12 @@ int main()
 
 void processInput(GLFWwindow* window)
 {
-	Vector3D movementDir;
-
+	std::cout << "  processInput\n";
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, true);
+	if (playerActor == nullptr) return;
+
+	Vector3D movementDir;
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 		movementDir += Vector3D(0.f, 1.f, 0.f);
 	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
@@ -162,8 +181,76 @@ void processInput(GLFWwindow* window)
 }
 
 
-void terminate()
+void terminate_L()
 {
 	if (bWinsockLoaded) WSACleanup();
 	glfwTerminate();
+}
+
+
+void updateActors(char* buffer, int bufferLen)
+{
+
+	// TODO: It is no longer true that the first actor received is the actor belonging to this client. This method must be reworked
+
+
+
+
+	/* -- Schema -- 
+	*  0  - 3  : id
+	*  4  - 16 : location
+	*  15 - 27 : rotation
+	*/
+
+	// Creating actor index and checking for invalid bufferLen
+	unsigned int numActors = -1;
+	float check = bufferLen / sizeof(Actor);
+	if (check - floor(check) == 0.f)
+		numActors = (int)floor(check);
+	if (numActors == -1)
+	{
+		std::cout << "Client::updateActors -- length of buffer not wholly divisible by sizeof(Actor)\n";
+		return;
+	}
+	
+	// -- Reading Actors -- //
+	Actor* actor;
+	for (int i = 0; i < numActors; i++)
+	{
+		unsigned int id = 0;
+		Vector3D position;
+		Vector3D rotation;
+		memcpy(&id, buffer, sizeof(unsigned int));
+		memcpy(&position, buffer + sizeof(unsigned int), sizeof(Vector3D));
+		memcpy(&rotation, buffer + sizeof(unsigned int) + sizeof(Vector3D), sizeof(Vector3D));
+
+		if (actorMap.count(id) == 0) // Actor not found
+		{
+			// Add actor to map
+			Actor* newActor = new Actor(position, rotation, id);
+			actorMap[id] = newActor;
+			if (!playerActor) // First time receiving actor data?
+				playerActor = newActor;
+		}
+		else // Actor found. Updating Actor data
+		{
+			actor = actorMap[id];
+			actor->setPosition(position);
+			actor->setRotation(rotation);
+		}
+		buffer += sizeof(Actor);
+	}
+}
+
+
+void handleCommand(char* buffer, unsigned int bufferLen)
+{
+	switch (buffer[0]) 
+	{
+		case '0':// Connection Reply
+		{
+			playerActor = new Actor(*Actor::deserialize(buffer, bufferLen));
+			break;
+		}
+	}
 }

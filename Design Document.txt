@@ -1,3 +1,18 @@
+----- TODO -----
+Move "Enter Server IP" code into loop so we don't need to restart client if server is not found
+
+Alter Socket code to allow for recvfrom to work. recvfrom is blocking and we need the client and
+the server to both send and receive data simultaneously. Note that we should avoid multiple threads
+
+
+
+
+---- Design issues ----
+Since one receiving of a packet occurs before a replication occurs, 
+There is a race condition for client input to be processed
+
+
+
 OpenGL Rendering
  - GLFW (OpenGL implementation)
  - GLAD (OpenGL function definitions)
@@ -99,3 +114,28 @@ player character.
 
 Whenever the client detects an ID for a character is does not yet have,
 it spawns that actor.
+
+
+
+-- Schema --
+first byte : message type.  0 == command, 1 == actor replication
+remaining bytes : Depend on message type
+ 0 --> Command specific data
+ 1 --> [actor ID (unsigned int), Location (Vector3D), Rotation (Vector3D)] == 28 bytes
+
+Server to Client Commands (Type 0)
+ 0. Connection Reply. This message stores the id for the actor the client will control
+
+
+
+
+
+---- Timeline ----
+
+Client sends server a connect request.
+
+Server responds by instantiating an actor, and associating that actor with that clients ip addr
+
+Server replies with command code '0', which contains that clients controlled actor
+
+Client will instantiate it's own actor

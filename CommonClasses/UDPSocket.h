@@ -17,14 +17,9 @@ public:
 	int init(bool bIsServer);
 
 	void sendData(const char* buffer, unsigned int bufferLen, sockaddr_in& recvAddr);
-
-	/*
-	* returns bytes read.
-	* 
-	*/
+	// returns bytes read as dynamic array
 	char* recvData(int& numBytesRead, sockaddr_in& sendingSockAddr);
 	
-
 public:
 	inline const char* getIPv4() { return IPv4; }
 };

@@ -49,15 +49,15 @@ public:
 public:
 	unsigned int getId() { return id; }
 
-	inline Vector3D getPosition() { return Position; }
-	inline void setPosition(Vector3D position) 
+	Vector3D getPosition() { return Position; }
+	void setPosition(Vector3D position) 
 	{
 		position.Normalize();
 		Position = Position + position;
 	}
 
-	inline Vector3D getRotation() { return Rotation; }
-	inline void setRotation(Vector3D rotation)
+	Vector3D getRotation() { return Rotation; }
+	void setRotation(Vector3D rotation)
 	{
 		rotation.Normalize();
 		Rotation = Position + rotation;
