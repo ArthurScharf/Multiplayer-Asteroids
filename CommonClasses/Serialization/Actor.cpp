@@ -11,6 +11,7 @@ Actor::Actor(Vector3D position, Vector3D rotation)
 	id = nextId++;
 	Position = position;
 	Rotation = rotation;
+	model = nullptr;
 }
 
 
@@ -19,6 +20,7 @@ Actor::Actor(Vector3D position, Vector3D rotation, unsigned int replicatedId)
 	id = replicatedId;
 	Position = position;
 	Rotation = rotation;
+	model = nullptr;
 }
 
 

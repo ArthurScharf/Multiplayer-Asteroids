@@ -5,6 +5,7 @@
 
 #include "Vector.h"
 #include "Serialization/Serializeable.h"
+#include "Model.h"
 
 
 
@@ -22,6 +23,7 @@ private:
 	Vector3D Position; // 12
 	Vector3D Rotation; // Should be a rotator. For now, is a Vector3D
 	//Mesh mesh; TODO 
+	Model* model;
 
 // -- Methods, Constructors, Destructors -- //
 public:

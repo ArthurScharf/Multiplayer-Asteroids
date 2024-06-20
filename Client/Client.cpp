@@ -2,6 +2,7 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
+
 #include <iostream>
 #include <WinSock2.h>
 #include <WS2tcpip.h> // inetPtons
@@ -33,12 +34,9 @@ Actor* playerActor = nullptr;
 
 // -- Forward Declaring Functions -- //
 void processInput(GLFWwindow* window);
-void terminate_L();
-
+void terminateProgram();
 void updateActors(char* buffer, int bufferLen);
-
 void handleCommand(char* buffer, unsigned int bufferLen);
-
 
 
 /* It is the job of the client's main code to organize and denote the structure
@@ -49,7 +47,6 @@ void handleCommand(char* buffer, unsigned int bufferLen);
 // ---- CLIENT ---- //
 int main()
 {
-
 	// ---------- Game State ---------- //
 	// playerActor = (Actor*)malloc(sizeof(Actor)); // The actor controlled by the client
 	playerActor = nullptr; // nullptr used to know if client is connected
@@ -97,20 +94,19 @@ int main()
 	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
 	{
 		std::cout << "Failed to initialize GLAD" << std::endl;
-		terminate_L();
+		terminateProgram();
 	}
 
 
 
-	std::cout << "Client.exe!main -- Beginning main loop\n";
+	// std::cout << "Client.exe!main -- Beginning main loop\n";
 
 	// -- 4. Sending & Receiving Messages -- //
 	while (!glfwWindowShouldClose(window))
 	{
-		std::cout << "Client.exe!main -- Looping\n";
+		// std::cout << "Client.exe!main -- Looping\n";
 		
 		processInput(window);
-
 
 		// Schema: First Actor in Buffer is always clients actor
 		// -- Receiving Data from Server -- //
@@ -126,8 +122,7 @@ int main()
 				updateActors(recvBuffer, numBytesRead);
 		}
 
-		std::cout << "Client.exe!main -- processed received data\n";
-
+		// std::cout << "Client.exe!main -- processed received data\n";
 
 		// -- Sending Data to Server -- //
 		char sendBuffer[2 + (MAX_ACTORS * sizeof(Actor))]; // I doubt command data will ever exceed this size
@@ -149,7 +144,7 @@ int main()
 		glfwSwapBuffers(window);
 	}
 
-	terminate_L();
+	terminateProgram();
 
 	// Prevents window from closing too quickly. Good so I can see print statements
 	char temp[200];
@@ -181,7 +176,7 @@ void processInput(GLFWwindow* window)
 }
 
 
-void terminate_L()
+void terminateProgram()
 {
 	if (bWinsockLoaded) WSACleanup();
 	glfwTerminate();
@@ -204,7 +199,7 @@ void updateActors(char* buffer, int bufferLen)
 
 	// Creating actor index and checking for invalid bufferLen
 	unsigned int numActors = -1;
-	float check = bufferLen / sizeof(Actor);
+	float check = bufferLen / (float)sizeof(Actor); // BUG
 	if (check - floor(check) == 0.f)
 		numActors = (int)floor(check);
 	if (numActors == -1)
@@ -215,7 +210,7 @@ void updateActors(char* buffer, int bufferLen)
 	
 	// -- Reading Actors -- //
 	Actor* actor;
-	for (int i = 0; i < numActors; i++)
+	for (unsigned int i = 0; i < numActors; i++)
 	{
 		unsigned int id = 0;
 		Vector3D position;

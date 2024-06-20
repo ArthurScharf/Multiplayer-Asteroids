@@ -42,6 +42,13 @@ int UDPSocket::init(bool bIsServer)
 	{
 		std::cout << "socket() OK" << std::endl;
 	}
+	// Set non-blocking mode
+	unsigned long nonBlocking = 1;
+	if (ioctlsocket(sock, FIONBIO, &nonBlocking) == SOCKET_ERROR)
+	{
+		terminate();
+		return 2;
+	}
 
 	// -- 3. Binding Socket to Address -- //
 	// Retreiving device LAN IP address
@@ -74,7 +81,7 @@ int UDPSocket::init(bool bIsServer)
 	inet_ntop(AF_INET, &sockAddr->sin_addr, ipStr, sizeof(ipStr));
 	printf("socket IP: %s\n", ipStr);
 
-
+	
 
 	// Binding
 	if (bind(sock, res->ai_addr, res->ai_addrlen) == SOCKET_ERROR)
@@ -106,11 +113,11 @@ void UDPSocket::sendData(const char* buffer, unsigned int bufferLen, sockaddr_in
 */
 char* UDPSocket::recvData(int& numBytesRead, sockaddr_in& sendingSockAddr)
 {
-	std::cout << "UDPSocket::recvData\n";
+	//std::cout << "UDPSocket::recvData\n";
 	char* buffer = (char*)malloc(BUFFER_SIZE);
 	int sockAddr_len = sizeof(sendingSockAddr);
 	numBytesRead = recvfrom(sock, buffer, BUFFER_SIZE, 0, (SOCKADDR*)&sendingSockAddr, &sockAddr_len);
-	std::cout << "  `recvfrom` finished\n";
+	//std::cout << "  `recvfrom` finished\n";
 	return buffer;
 }
 

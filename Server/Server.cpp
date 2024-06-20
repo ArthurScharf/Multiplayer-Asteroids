@@ -30,7 +30,7 @@ struct ipAddress
 {
 	in_addr _in_addr;
 
-	bool operator<(const ipAddress& other) const 
+	bool operator<(const ipAddress& other) const
 	{
 		return _in_addr.S_un.S_addr < other._in_addr.S_un.S_addr;
 	}
@@ -55,7 +55,6 @@ Actor* createActor(Vector3D& pos, Vector3D& rot);
 // ---- SERVER ---- //
 int main()
 {
-
 	UDPSocket sock;
 	sock.init(true);
 
@@ -99,12 +98,14 @@ int main()
 					sendBuffer[1] = '0'; // Command: Connection reply
 					memcpy(sendBuffer + 2, clientActor, sizeof(Actor));
 					sock.sendData(sendBuffer, 2 + sizeof(Actor), clientAddr);
-				}
 
+					std::cout << "Server::main -- client connected\n";
+				}
 			}
 			if (recvBuffer[0] == '1') // Actor replication received
 			{
-				// TODO: 
+				// TODO
+
 			}
 		}
 
