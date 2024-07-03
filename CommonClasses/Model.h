@@ -17,8 +17,7 @@
 
 
 #include "Mesh.h"
-//#include "Shader.h"
-
+#include "Shader.h"
 #include "stb_image.h"
 
 unsigned int TextureFromFile(const char* path, const std::string& directory, bool gamma = false);
@@ -34,21 +33,47 @@ public:
 
 	Model(std::string const& path, bool gamma = false) : gammaCorrection(gamma)
 	{
-		//// read file via assimp
-		//Assimp::Importer importer;
-		//const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs);
-		//if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
-		//{
-		//	std::cout << "ERROR::ASSIMP::" << importer.GetErrorString() << std::endl;
-		//	return;
-		//}
-		//// retreive the directory path of the filepath
-		//directory = path.substr(0, path.find_last_of('/'));
+		// read file via assimp
+		Assimp::Importer importer;
+		const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs);
+		if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
+		{
+			std::cout << "ERROR::ASSIMP::" << importer.GetErrorString() << std::endl;
+			return;
+		}
+		// retreive the directory path of the filepath
+		directory = path.substr(0, path.find_last_of('/'));
 
-		//// process ASSIMP's root node recursively
-		//processNode(scene->mRootNode, scene);
+		// process ASSIMP's root node recursively
+		processNode(scene->mRootNode, scene);
 	}
 
+    // draws the model, and thus all its meshes
+    void Draw(Shader& shader)
+    {
+        for (unsigned int i = 0; i < meshes.size(); i++)
+            meshes[i].Draw(shader);
+    }
+
+private:
+    // loads a model with supported ASSIMP extensions from file and stores the resulting meshes in the meshes vector.
+    void loadModel(std::string const& path)
+    {
+        // read file via ASSIMP
+        Assimp::Importer importer;
+        const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs);
+        // check for errors
+        if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) // if is Not Zero
+        {
+            std::cout << "ERROR::ASSIMP:: " << importer.GetErrorString() << std::endl;
+            return;
+        }
+        // retrieve the directory path of the filepath
+        directory = path.substr(0, path.find_last_of('/'));
+
+        // process ASSIMP's root node recursively
+        processNode(scene->mRootNode, scene);
+    }
 	// processes a node in a recursive fashion. Processes each individual mesh located at the node and repeats this process on its children nodes (if any).
 	void processNode(aiNode* node, const aiScene* scene)
 	{
@@ -66,8 +91,7 @@ public:
 			processNode(node->mChildren[i], scene);
 		}
 	}
-
-
+    // processes a node in a recursive fashion. Processes each individual mesh located at the node and repeats this process on its children nodes (if any).
     Mesh processMesh(aiMesh* mesh, const aiScene* scene)
     {
         // data to fill
@@ -151,9 +175,8 @@ public:
         // return a mesh object created from the extracted mesh data
         return Mesh(vertices, indices, textures);
     }
-
     // checks all material textures of a given type and loads the textures if they're not loaded yet.
-// the required info is returned as a Texture struct.
+    // the required info is returned as a Texture struct.
     std::vector<Texture> loadMaterialTextures(aiMaterial * mat, aiTextureType type, std::string typeName)
     {
         std::vector<Texture> textures;
@@ -185,9 +208,6 @@ public:
         return textures;
     }
 };
-
-
-
 
 unsigned int TextureFromFile(const char* path, const std::string& directory, bool gamma)
 {
@@ -228,3 +248,4 @@ unsigned int TextureFromFile(const char* path, const std::string& directory, boo
 
     return textureID;
 }
+

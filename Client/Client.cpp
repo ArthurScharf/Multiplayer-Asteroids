@@ -1,7 +1,7 @@
 #pragma once
+
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-
 
 #include <iostream>
 #include <WinSock2.h>
@@ -9,6 +9,8 @@
 #include <tchar.h> // _T
 #include <thread>
 #include <map>
+
+#include "Camera.h"
 
 #include "../CommonClasses/Actor.h"
 #include "../CommonClasses/Definitions.h"
@@ -87,9 +89,16 @@ int main()
 		return 0;
 	}
 	glfwMakeContextCurrent(window); // Why are we doing this again?
+	
+	// Camera
+	//Camera camera(
+	//	glm::vec3(0.f, 0.f, 3.f), // Camera Position
+	//	glm::vec3(0.f, 1.f, 0.f), // Camera Up
+	//	-90.f,
+	//	0.f
+	//);
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-
-
+	
 	// Checking to see if GLAD loaded
 	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
 	{
@@ -97,18 +106,49 @@ int main()
 		terminateProgram();
 	}
 
+	// OpenGL Settings
+	glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
+	glEnable(GL_DEPTH_TEST);
 
+	// Compiling GLSL Shaders 
+	Shader shader("GLSL Shaders/Vertex.txt", "Shaders/Fragment.txt");
 
-	// std::cout << "Client.exe!main -- Beginning main loop\n";
+	// Loading Models. Newly constructed actors have their model pointer copied. Faster than loading each time an actor is created
+	//Model model_ship();
+	//Model model_asteroid();
+	//Model model_missile();
+	
+	//Vector3D position(0.f);
+	//Vector3D rotation(0.f);
+	//Actor testActor(position, rotation, "test");	
+	Model model_test("../CommonClasses/FBX/chair/chair.fbx");
 
-	// -- 4. Sending & Receiving Messages -- //
+	// Main loop
 	while (!glfwWindowShouldClose(window))
 	{
-		// std::cout << "Client.exe!main -- Looping\n";
-		
 		processInput(window);
 
-		// Schema: First Actor in Buffer is always clients actor
+
+
+		// -- 4.1. Rendering Actors -- //
+		glClearColor(0.1f, 0.1f, 0.1f, 1.f);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		glm::mat4 model = glm::mat4(1.f);
+		glm::mat4 view = glm::mat4(1.f);
+		glm::mat4 projection = glm::mat4(1.f);
+
+		// Vertex Transformation
+		//model = glm::translate(model, glm::vec3(0.f));
+		//view = camera.GetViewMatrix();
+		//projection = glm::perspective(glm::radians(camera.zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.f);
+
+
+
+
+		// -- 4.2. Sending & Receiving Messages -- 
+		//		Schema: First Actor in Buffer is always clients actor
+		
 		// -- Receiving Data from Server -- //
 		int numBytesRead = 0;
 		sockaddr_in recvAddr;
@@ -121,9 +161,6 @@ int main()
 			else if (recvBuffer[0] == '1') // Actor replication
 				updateActors(recvBuffer, numBytesRead);
 		}
-
-		// std::cout << "Client.exe!main -- processed received data\n";
-
 		// -- Sending Data to Server -- //
 		char sendBuffer[2 + (MAX_ACTORS * sizeof(Actor))]; // I doubt command data will ever exceed this size
 		// No player actor --> The server hasn't given us one yet; we're not connected

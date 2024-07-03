@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#include "../Client/Shader.h"
+#include "Shader.h"
 
 //#include <glm-1.0.1/glm/glm.hpp> // GL math
 #include "GLFW/glfw3.h"

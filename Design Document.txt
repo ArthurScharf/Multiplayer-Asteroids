@@ -11,8 +11,11 @@ the server to both send and receive data simultaneously. Note that we should avo
 Since one receiving of a packet occurs before a replication occurs, 
 There is a race condition for client input to be processed
 
+Despite the fact that the server doesn't use any rendering code, common classes stores the classes
+used for this. Might be useful in the future, but for now, represents a point of confusion
 
 
+---- Overview ----
 OpenGL Rendering
  - GLFW (OpenGL implementation)
  - GLAD (OpenGL function definitions)
@@ -139,3 +142,28 @@ Server responds by instantiating an actor, and associating that actor with that 
 Server replies with command code '0', which contains that clients controlled actor
 
 Client will instantiate it's own actor
+
+
+
+
+
+
+
+QUESTION: What should store shaders?
+ANSWER_1: Each actor stores a model. Each model stores a mesh. If each mesh would need to store
+          unique shaders, then We'd want Mesh to have them. 
+
+Question: What are the advantages of each mesh storing it's own shader?
+ Each mesh on a model could shade itself completely differently than the others.
+ Each shader is doing lighting using the phong model. The only difference is the texture used for each.
+ Each mesh stores the texture's it will use. The intent is that each texture represents one of the 
+ layers applied to create a material. 
+ Thus, we don't need the mesh to store the shaders.
+
+Question: What are the advantages of the Model storing the shader?
+ The whole model experiences the same lighting in our application. Thus, each actor storing the shader.
+ BUT all the shaders need to have global lights set. These lights affect all the actors.
+ While it would be feasible to set light parameters within each shader through each actor, this seems like an
+ extra step.
+
+Solution: Shaders are stored as globally as possible; in the client. 

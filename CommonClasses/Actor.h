@@ -6,6 +6,7 @@
 #include "Vector.h"
 #include "Serialization/Serializeable.h"
 #include "Model.h"
+#include "Shader.h"
 
 
 
@@ -27,8 +28,9 @@ private:
 
 // -- Methods, Constructors, Destructors -- //
 public:
-	Actor(Vector3D position, Vector3D rotation); // Server side
-	Actor(Vector3D position, Vector3D rotation, unsigned int replicatedId); // Client side
+	Actor(Vector3D& position, Vector3D& rotation); // Server side
+	Actor(Vector3D& position, Vector3D& rotation, unsigned int replicatedId); // Client side
+	~Actor();
 
 	std::string toString()
 	{
@@ -39,6 +41,11 @@ public:
 		return stream.str();
 	}
 
+	// Separate from cstr because models shouldn't always be loaded
+	void InitializeModel(const std::string& path);
+
+	void Draw(Shader& shader);
+
 	static unsigned int serialize(char* buffer, Actor* actor);
 	/*
 	* The signature is different than serialize because we want to instantiate an actor internally.
@@ -46,6 +53,8 @@ public:
 	* which run's it's own selection of issues
 	*/
 	static Actor* deserialize(const char* buffer, unsigned int& bytesRead); 
+
+
 
 // --  Getters and Setters -- //
 public:

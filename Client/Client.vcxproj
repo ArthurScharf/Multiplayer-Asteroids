@@ -72,7 +72,7 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <IncludePath>C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glm-1.0.1;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glfw-3.4\include;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glad\include;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\assimp\include;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\assimp\Build\include;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\Users\User\source\repos\Multiplayer-Asteroids\Include;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\assimp\Build\lib\Debug;$(LibraryPath)</LibraryPath>
+    <LibraryPath>C:\Users\User\source\repos\Multiplayer-Asteroids\Libraries;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glfw-3.4\build\src\Debug\glfw3.lib;C:\Users\User\C &amp; C++ Libraries\glfw-3.4\build\src\Debug;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -135,8 +135,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Client.cpp" />
-    <ClCompile Include="Includes\glad.c" />
-    <ClCompile Include="Rendering\glad.c" />
+    <ClCompile Include="glad.c" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\CommonClasses\CommonClasses.vcxproj">
@@ -145,6 +144,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\CommonClasses\Mesh.h" />
+    <ClInclude Include="Camera.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

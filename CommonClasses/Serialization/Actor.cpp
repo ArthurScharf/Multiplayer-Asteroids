@@ -6,21 +6,32 @@
 #include <cstdio>
 
 
-Actor::Actor(Vector3D position, Vector3D rotation)
+Actor::Actor(Vector3D& position, Vector3D& rotation)
 {
-	id = nextId++;
-	Position = position;
-	Rotation = rotation;
-	model = nullptr;
+	Actor(position, rotation, nextId++);
 }
 
 
-Actor::Actor(Vector3D position, Vector3D rotation, unsigned int replicatedId)
+Actor::Actor(Vector3D& position, Vector3D& rotation, unsigned int replicatedId)
+	: Position(position), Rotation(rotation), id(replicatedId)
 {
-	id = replicatedId;
-	Position = position;
-	Rotation = rotation;
 	model = nullptr;
+}
+
+Actor::~Actor()
+{
+	delete model;
+}
+
+
+void Actor::InitializeModel(const std::string& path)
+{
+	model = new Model(path);
+}
+
+void Actor::Draw(Shader& shader)
+{
+	model->Draw(shader);
 }
 
 

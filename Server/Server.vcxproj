@@ -71,6 +71,10 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <IncludePath>C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glad\include;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glm-1.0.1;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\assimp\Include;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glfw-3.4\include;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\Users\User\Source\repos\Multiplayer-Asteroids\Libraries;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glfw-3.4\build\src\Debug\glfw3.lib;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>

@@ -88,8 +88,10 @@ int main()
 				}
 				else // new client
 				{
+					Vector3D _position(0.f);
+					Vector3D _rotation(0.f);
 					// Creating new clients actor
-					Actor* clientActor = new Actor(Vector3D(0.f), Vector3D(0.f)); // TODO: Properly choose the spawn location for the player's actor
+					Actor* clientActor = new Actor(_position, _rotation); // TODO: Properly choose the spawn location for the player's actor
 					clients.insert(std::make_pair(ip, clientActor)); // Creating the associating
 					actors[numActors] = clientActor;
 
