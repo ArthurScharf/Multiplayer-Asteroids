@@ -71,8 +71,8 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glm-1.0.1;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glfw-3.4\include;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glad\include;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\assimp\include;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\assimp\Build\include;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\Users\User\C &amp; C++ Libraries\glfw-3.4\build\src\Debug;C:\Users\User\C &amp; C++ Libraries\assimp\Build\lib\Debug;$(LibraryPath)</LibraryPath>
+    <IncludePath>C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glm-1.0.1;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glfw-3.4\include;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glad\include;C:\Users\User\C &amp; C++ Libraries\assimp\include;C:\Users\User\C &amp; C++ Libraries\assimp\Build\include;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glfw-3.4\build\src\Debug\glfw3.lib;C:\Users\User\C &amp; C++ Libraries\glfw-3.4\build\src\Debug;C:\Users\User\C &amp; C++ Libraries\assimp\Build\lib\Debug;C:\Users\User\C &amp; C++ Libraries\assimp\include;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -108,13 +108,13 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Users\User\source\repos\Multiplayer-Asteroids\Include\assimp\Build\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>glfw3.lib;C:\Users\User\C &amp; C++ Libraries\assimp\Build\lib\Debug\assimp-vc143-mtd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>C:\Users\User\C &amp; C++ Libraries\assimp\Build\lib\Debug\assimp-vc143-mtd.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">

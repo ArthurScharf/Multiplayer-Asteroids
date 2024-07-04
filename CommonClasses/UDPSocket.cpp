@@ -74,7 +74,6 @@ int UDPSocket::init(bool bIsServer)
 
 
 	char ipStr[INET_ADDRSTRLEN];
-	void* addr;
 
 	// -- Setting IPv4 -- //
 	sockaddr_in* sockAddr = (sockaddr_in*)(res->ai_addr); // Since memory in both is contiguous, we can cast it and it'll populate correctly??
