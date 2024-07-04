@@ -72,7 +72,7 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <IncludePath>C:\Users\User\source\repos\Multiplayer-Asteroids\Include\assimp\Include;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glad\include;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glfw-3.4\include;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glm-1.0.1;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\Users\User\source\repos\Multiplayer-Asteroids\Libraries;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glfw-3.4\build\src\Debug;$(LibraryPath)</LibraryPath>
+    <LibraryPath>C:\Users\User\source\repos\Multiplayer-Asteroids\Libraries;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glfw-3.4\build\src\Debug;C:\Users\User\C &amp; C++ Libraries\assimp\Build\lib\Debug;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -155,10 +155,12 @@
     <ClInclude Include="Shader.h" />
     <ClInclude Include="stb_image.h" />
     <ClInclude Include="UDPSocket.h" />
-    <ClInclude Include="Vector.h" />
+    <ClInclude Include="Vector3D.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CommonClasses.cpp" />
+    <ClCompile Include="Mesh.cpp" />
+    <ClCompile Include="Model.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
@@ -166,8 +168,10 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Serialization\Actor.cpp" />
+    <ClCompile Include="Shader.cpp" />
     <ClCompile Include="stb_image.cpp" />
     <ClCompile Include="UDPSocket.cpp" />
+    <ClCompile Include="Vector3D.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

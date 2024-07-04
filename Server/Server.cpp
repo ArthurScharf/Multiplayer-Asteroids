@@ -8,7 +8,7 @@
 
 #include "../CommonClasses/Actor.h"
 #include "../CommonClasses/Definitions.h"
-#include "../CommonClasses/Vector.h"
+#include "../CommonClasses/Vector3D.h"
 #include "../CommonClasses/UDPSocket.h"
 
 

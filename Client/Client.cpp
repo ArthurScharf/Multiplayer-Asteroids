@@ -15,7 +15,7 @@
 #include "../CommonClasses/Actor.h"
 #include "../CommonClasses/Definitions.h"
 #include "../CommonClasses/UDPSocket.h"
-#include "../CommonClasses/Vector.h"
+#include "../CommonClasses/Vector3D.h"
 #include "../CommonClasses/Serialization/Serializer.h"
 
 #pragma comment(lib, "ws2_32.lib") // What is this doing?

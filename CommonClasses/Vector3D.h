@@ -13,22 +13,14 @@ public:
 	float y;
 	float z;
 
-	Vector3D() : x(0.f), y(0.f), z(0.f) {};
-	Vector3D(float val) : x(val), y(val), z(val) {};
-	Vector3D(float _x, float _y, float _z) : x(_x), y(_y), z(_z) {};
+	Vector3D();
+	Vector3D(float val);
+	Vector3D(float _x, float _y, float _z);
 
 	/* Normalizes the vector 
 	Is ternary operator the best way to check for 0?
 	*/
-	void Normalize()
-	{
-		float magnitude = sqrt((x * x) + (y * y) + (z * z));
-		if (magnitude == 0) return; // magnitude is only 0 if all values are 0
-		x /= magnitude;
-		y /= magnitude;
-		z /= magnitude;
-		// return this; // Cascading
-	}
+	void Normalize();
 
 	std::string toString()
 	{
@@ -36,7 +28,6 @@ public:
 		sprintf_s(buffer, 50, "%4.2f %4.2f %4.2f", x, y, z);
 		return std::string(buffer);
 	}
-
 
 
 	/* Serializes all data members to be sent over the network */

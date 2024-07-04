@@ -72,8 +72,8 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glad\include;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glm-1.0.1;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\assimp\Include;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glfw-3.4\include;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\Users\User\Source\repos\Multiplayer-Asteroids\Libraries;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glfw-3.4\build\src\Debug\glfw3.lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glm-1.0.1;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glfw-3.4\include;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glad\include;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\assimp\include;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\assimp\Build\include;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\Users\User\source\repos\Multiplayer-Asteroids\Libraries;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glfw-3.4\build\src\Debug\glfw3.lib;C:\Users\User\C &amp; C++ Libraries\glfw-3.4\build\src\Debug;C:\Users\User\C &amp; C++ Libraries\assimp\Build\lib\Debug;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -114,6 +114,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>C:\Users\User\C &amp; C++ Libraries\assimp\Build\lib\Debug\assimp-vc143-mtd.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -133,6 +134,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="glad.c" />
     <ClCompile Include="Server.cpp" />
   </ItemGroup>
   <ItemGroup>

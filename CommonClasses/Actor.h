@@ -3,7 +3,7 @@
 #include <string>
 #include <sstream>
 
-#include "Vector.h"
+#include "Vector3D.h"
 #include "Serialization/Serializeable.h"
 #include "Model.h"
 #include "Shader.h"
@@ -32,14 +32,7 @@ public:
 	Actor(Vector3D& position, Vector3D& rotation, unsigned int replicatedId); // Client side
 	~Actor();
 
-	std::string toString()
-	{
-		std::ostringstream stream;
-		stream << "ID: " << id;
-		stream << " / Position: " << Position.toString();
-		stream << " / Rotation: " << Rotation.toString();
-		return stream.str();
-	}
+	std::string toString();
 
 	// Separate from cstr because models shouldn't always be loaded
 	void InitializeModel(const std::string& path);

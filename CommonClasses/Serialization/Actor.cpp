@@ -23,6 +23,15 @@ Actor::~Actor()
 	delete model;
 }
 
+std::string Actor::toString()
+{
+	std::ostringstream stream;
+	stream << "ID: " << id;
+	stream << " / Position: " << Position.toString();
+	stream << " / Rotation: " << Rotation.toString();
+	return stream.str();
+}
+
 
 void Actor::InitializeModel(const std::string& path)
 {
