@@ -43,7 +43,7 @@ Shader::Shader(const char* szVertexPath, const char* szFragmentPath)
 	// -- 2. Compile Shaders -- // 
 	unsigned int vertex, fragment;
 	int success;
-	char infoLog[512]; // guessed required max size
+	char infoLog[512]{};
 	// -- vertex shader -- //
 	vertex = glCreateShader(GL_VERTEX_SHADER);
 	glShaderSource(vertex, 1, &vShaderCode, NULL);
@@ -53,7 +53,7 @@ Shader::Shader(const char* szVertexPath, const char* szFragmentPath)
 	if (!success)
 	{
 		glGetShaderInfoLog(vertex, 512, NULL, infoLog);
-		std::cout << "ERROR::SHADER::VERTEX::COMPILAATION_FAILED\n" << infoLog << std::endl;
+		std::cout << "ERROR::SHADER::VERTEX::COMPILATION_FAILED -- " << infoLog << std::endl;
 	}
 	// -- Fragment Shader -- //
 	fragment = glCreateShader(GL_FRAGMENT_SHADER);
@@ -62,7 +62,7 @@ Shader::Shader(const char* szVertexPath, const char* szFragmentPath)
 	if (!success)
 	{
 		glGetShaderInfoLog(vertex, 512, NULL, infoLog);
-		std::cout << "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n" << infoLog << std::endl;
+		std::cout << "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED -- " << infoLog << std::endl;
 	}
 
 	// Shader program

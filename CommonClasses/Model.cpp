@@ -30,12 +30,16 @@ Model::Model(std::string const& path, bool gamma)
 
 	// process ASSIMP's root node recursively
 	processNode(scene->mRootNode, scene);
+
+    position.x = 0.f;
+    position.y = 0.f;
+    position.z = 0.f;
 }
 
 void Model::Draw(Shader& shader)
 {
-	for (unsigned int i = 0; i < meshes.size(); i++)
-		meshes[i].Draw(shader);
+    for (unsigned int i = 0; i < meshes.size(); i++)
+        meshes[i].Draw(shader);
 }
 
 

@@ -15,7 +15,7 @@ Actor::Actor(Vector3D& position, Vector3D& rotation)
 Actor::Actor(Vector3D& position, Vector3D& rotation, unsigned int replicatedId)
 	: Position(position), Rotation(rotation), id(replicatedId)
 {
-	model = nullptr;
+	model = new Model("../FBX/chair/chair.fbx");
 }
 
 Actor::~Actor()
@@ -40,6 +40,7 @@ void Actor::InitializeModel(const std::string& path)
 
 void Actor::Draw(Shader& shader)
 {
+	shader.setVec3("positionOffset", glm::vec3(Position.x, Position.y, Position.z));
 	model->Draw(shader);
 }
 

@@ -29,6 +29,13 @@ struct Texture
 	std::string path;
 };
 
+
+/*
+* Meshes work with vertex shaders with the following layout
+* (layout 0) --> Vec3 Position 
+* (layout 1) --> Vec3 Normal
+* (layout 2) --> Vec2 Texture Coordinate
+*/
 class Mesh
 {
 // -- Members -- //

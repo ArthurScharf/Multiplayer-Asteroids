@@ -56,14 +56,14 @@ public:
 	Vector3D getPosition() { return Position; }
 	void setPosition(Vector3D position) 
 	{
-		position.Normalize();
-		Position = Position + position;
+		//position.Normalize();
+		Position = position;
 	}
 
 	Vector3D getRotation() { return Rotation; }
 	void setRotation(Vector3D rotation)
 	{
-		rotation.Normalize();
-		Rotation = Position + rotation;
+		//rotation.Normalize();
+		Rotation = rotation;
 	}
 };

@@ -32,10 +32,11 @@ public:
 	std::vector<Mesh> meshes;
 	std::string directory;
 	bool gammaCorrection;
+private:
+    Vector3D position; // relative to Owning Actor. 
 
+public:
     Model(std::string const& path, bool gamma = false);
-
-
     // draws the model, and thus all its meshes
     void Draw(Shader& shader);
 
@@ -51,6 +52,11 @@ private:
     std::vector<Texture> loadMaterialTextures(aiMaterial* mat, aiTextureType type, std::string typeName);
     // Helper function
     unsigned int TextureFromFile(const char* path, const std::string& directory, bool gamma = false);
+
+ 
+// -- Util Functions -- //
+public:
+    void setPosition(Vector3D _position) { position = _position; }
 };
 
 

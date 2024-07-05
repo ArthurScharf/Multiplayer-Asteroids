@@ -90,7 +90,8 @@ void main()
 
 	vec3 fragColor = calculateDirectionalLight(dirLight, Normal, viewDir) ;
 
-	FragColor = vec4(fragColor, 1.0);
+	//FragColor = vec4(fragColor, 1.0);
+	FragColor = vec4(1.f, 1.f, 1.f, 1.f);
 };
 
 

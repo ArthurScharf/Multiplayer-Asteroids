@@ -63,5 +63,6 @@ void Mesh::Draw(Shader& shader)
 	// Draw mesh
 	glBindVertexArray(VAO);
 	glDrawElements(GL_TRIANGLES, (GLsizei)indices.size(), GL_UNSIGNED_INT, 0);
+	//(GL_LINES, (GLsizei)indices.size(), GL_UNSIGNED_INT, 0);
 	glBindVertexArray(0); // good practice to reset the VAO binding
 }

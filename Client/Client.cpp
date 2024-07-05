@@ -25,13 +25,69 @@ const unsigned int SCR_HEIGHT = 600;
 
 bool bWinsockLoaded = false;
 
-Vector3D position; // Player position. A temporary place for this. Will probably go into an Actor class later on
+// Camera
+Camera camera( glm::vec3(0.f, 0.f, 100.f) ); // Camera Position
+//Camera camera(0.f, 0.f, 100.f, 0.f, 1.f, 0.f, -90.f, 0.f);
 const float playerSpeed = 25.f; // The rate at which the player changes position
 
 // We need these here so updateActors can access them //
 //Actor* actors[MAX_PLAYERS]; // Allocates local memory for pointers to actor pointers
 std::map<unsigned int, Actor*> actorMap;
 Actor* playerActor = nullptr;
+
+float deltaTime = 0.f;
+float lastFrame = 0.f;
+
+
+// -- Testing -- //
+// Each row is a position, and a normal
+float vertices[] = {
+	-0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+	 0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+	 0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+	 0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+	-0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+	-0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+
+	-0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+	 0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+	 0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+	 0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+	-0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+	-0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+
+	-0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
+	-0.5f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
+	-0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
+	-0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
+	-0.5f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
+	-0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
+
+	 0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
+	 0.5f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
+	 0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
+	 0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
+	 0.5f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
+	 0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
+
+	-0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
+	 0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
+	 0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
+	 0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
+	-0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
+	-0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
+
+	-0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
+	 0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
+	 0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
+	 0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
+	-0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
+	-0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f
+};
+
+
+
+
 
 
 // -- Forward Declaring Functions -- //
@@ -51,7 +107,6 @@ int main()
 {
 	// ---------- Game State ---------- //
 	// playerActor = (Actor*)malloc(sizeof(Actor)); // The actor controlled by the client
-	playerActor = nullptr; // nullptr used to know if client is connected
 
 	// ---------- Networking ---------- //
 	UDPSocket sock;
@@ -89,16 +144,8 @@ int main()
 		return 0;
 	}
 	glfwMakeContextCurrent(window); // Why are we doing this again?
-	
-	// Camera
-	//Camera camera(
-	//	glm::vec3(0.f, 0.f, 3.f), // Camera Position
-	//	glm::vec3(0.f, 1.f, 0.f), // Camera Up
-	//	-90.f,
-	//	0.f
-	//);
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-	
+
 	// Checking to see if GLAD loaded
 	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
 	{
@@ -111,44 +158,62 @@ int main()
 	glEnable(GL_DEPTH_TEST);
 
 	// Compiling GLSL Shaders 
-	Shader shader("GLSL Shaders/Vertex.txt", "Shaders/Fragment.txt");
+	Shader shader(
+		"C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/GLSL Shaders/Vertex.txt",
+		"C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/GLSL Shaders/Fragment.txt"
+	);
 
-	// Loading Models. Newly constructed actors have their model pointer copied. Faster than loading each time an actor is created
-	//Model model_ship();
-	//Model model_asteroid();
-	//Model model_missile();
+	Vector3D playerPosition(0.f);
+	Vector3D playerRotation(0.f);
+	playerActor = new Actor(playerPosition, playerRotation);
+	playerActor->InitializeModel("../CommonClasses/FBX/chair/chair.fbx");
 	
-	//Vector3D position(0.f);
-	//Vector3D rotation(0.f);
-	//Actor testActor(position, rotation, "test");	
-	Model model_test("../CommonClasses/FBX/chair/chair.fbx");
+
+	/* -- Used for testing -- 
+	unsigned int VAO, VBO;
+	glGenVertexArrays(1, &VAO);
+	glGenBuffers(1, &VBO);
+	glBindBuffer(GL_ARRAY_BUFFER, VBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+	glBindVertexArray(VAO);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+	glEnableVertexAttribArray(0);
+	*/
 
 	// Main loop
 	while (!glfwWindowShouldClose(window))
 	{
+		// Per-frame logic
+		float currentFrame = static_cast<float>(glfwGetTime());
+		deltaTime = currentFrame - lastFrame;
+		lastFrame = currentFrame;
+
 		processInput(window);
-
-
 
 		// -- 4.1. Rendering Actors -- //
 		glClearColor(0.1f, 0.1f, 0.1f, 1.f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		shader.use();
 
 		glm::mat4 model = glm::mat4(1.f);
 		glm::mat4 view = glm::mat4(1.f);
 		glm::mat4 projection = glm::mat4(1.f);
 
 		// Vertex Transformation
-		//model = glm::translate(model, glm::vec3(0.f));
-		//view = camera.GetViewMatrix();
-		//projection = glm::perspective(glm::radians(camera.zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.f);
-
-
-
-
-		// -- 4.2. Sending & Receiving Messages -- 
-		//		Schema: First Actor in Buffer is always clients actor
+		model = glm::translate(model, glm::vec3(0.f));
+		shader.setMat4("model", model);
+		view = camera.GetViewMatrix();
+		shader.setMat4("view", view);
+		projection = glm::perspective(glm::radians(camera.zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.f);
+		shader.setMat4("projection", projection);
 		
+		playerActor->Draw(shader);
+
+
+		// -- 4.2. Sending & Receiving Messages -- //		
 		// -- Receiving Data from Server -- //
 		int numBytesRead = 0;
 		sockaddr_in recvAddr;
@@ -183,6 +248,9 @@ int main()
 
 	terminateProgram();
 
+
+
+
 	// Prevents window from closing too quickly. Good so I can see print statements
 	char temp[200];
 	std::cin >> temp;
@@ -193,11 +261,21 @@ int main()
 
 void processInput(GLFWwindow* window)
 {
-	std::cout << "  processInput\n";
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, true);
-	if (playerActor == nullptr) return;
+	if (playerActor == nullptr) return; 
 
+	// -- Camera Testing -- //
+	//if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+	//	camera.position += glm::vec3(0.f, 1.f, 0.f)  * playerSpeed * deltaTime;
+	//if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+	//	camera.position += glm::vec3(0.f, -1.f, 0.f) * playerSpeed * deltaTime;
+	//if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+	//	camera.position += glm::vec3(1.f, 0.f, 0.f) * playerSpeed * deltaTime;
+	//if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+	//	camera.position += glm::vec3(-1.f, 0.f, 0.f) * playerSpeed * deltaTime;
+	//printf("%.4f, %.4f, %.4f", camera.position.x, camera.position.y, camera.position.z);
+	
 	Vector3D movementDir;
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 		movementDir += Vector3D(0.f, 1.f, 0.f);
@@ -207,16 +285,8 @@ void processInput(GLFWwindow* window)
 		movementDir += Vector3D(1.f, 0.f, 0.f);
 	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
 		movementDir += Vector3D(-1.f, 0.f, 0.f);
-
 	movementDir.Normalize();
-	playerActor->setPosition(playerActor->getPosition() + (movementDir * playerSpeed));
-}
-
-
-void terminateProgram()
-{
-	if (bWinsockLoaded) WSACleanup();
-	glfwTerminate();
+	playerActor->setPosition(playerActor->getPosition() + (movementDir * playerSpeed * deltaTime));
 }
 
 
@@ -224,9 +294,6 @@ void updateActors(char* buffer, int bufferLen)
 {
 
 	// TODO: It is no longer true that the first actor received is the actor belonging to this client. This method must be reworked
-
-
-
 
 	/* -- Schema -- 
 	*  0  - 3  : id
@@ -281,8 +348,15 @@ void handleCommand(char* buffer, unsigned int bufferLen)
 	{
 		case '0':// Connection Reply
 		{
-			playerActor = new Actor(*Actor::deserialize(buffer, bufferLen));
+			playerActor = Actor::deserialize(buffer, bufferLen);
 			break;
 		}
 	}
+}
+
+
+void terminateProgram()
+{
+	if (bWinsockLoaded) WSACleanup();
+	glfwTerminate();
 }
