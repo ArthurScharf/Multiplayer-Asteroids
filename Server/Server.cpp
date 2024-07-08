@@ -83,8 +83,8 @@ int main()
 				if (clients.count(ip) != 0) // Error. Client that is already connected wants to connect
 				{
 					continue;
-					// TODO: reply with an error message that tells the client they're already connected
-					// TODO: Remove the client from the client pool?
+					// UDP so client is spamming connect message until server replies.
+					// We'll likely receive duplicate connect packets. These should be ignored
 				}
 				else // new client
 				{
@@ -92,6 +92,7 @@ int main()
 					Vector3D _rotation(0.f);
 					// Creating new clients actor
 					Actor* clientActor = new Actor(_position, _rotation); // TODO: Properly choose the spawn location for the player's actor
+					// BUG: without calling clientActor->InitializeMode(...), an exception will be thrown
 					clients.insert(std::make_pair(ip, clientActor)); // Creating the associating
 					actors[numActors] = clientActor;
 
@@ -112,9 +113,6 @@ int main()
 		}
 
 		
-		continue; // TESTING CONNECTION RN
-
-
 		// -- Actor replication -- //
 		// Packing actor data
 		sendBuffer[0] = '1'; // Actor replication

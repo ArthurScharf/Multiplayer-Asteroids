@@ -38,10 +38,13 @@ const float playerSpeed = 25.f; // The rate at which the player changes position
 */
 std::map<unsigned int, Actor*> actorMap;
 Actor* playerActor = nullptr;
+unsigned int playerActorID = -1; 
 
 float deltaTime = 0.f;
 float lastFrame = 0.f;
 
+
+const std::string gearFBX_path = "C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx";
 
 
 // -- Forward Declaring Functions -- //
@@ -115,12 +118,11 @@ int main()
 
 
 	// -- TEST -- //
-	Vector3D playerPosition(0.f);
-	Vector3D playerRotation(0.f);
-	playerActor = new Actor(playerPosition, playerRotation);
-	//playerActor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/chair/chair.fbx");
-	playerActor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx"); /* I don't understand why, but this MUST be called or an excpetion is thrown */
-	actorMap.insert({ playerActor->getId(), playerActor });
+	//Vector3D playerPosition(0.f);
+	//Vector3D playerRotation(0.f);
+	//playerActor = new Actor(playerPosition, playerRotation);
+	//playerActor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx"); /* I don't understand why, but this MUST be called or an excpetion is thrown */
+	//actorMap.insert({ playerActor->getId(), playerActor });
 
 	/* -- Used for testing -- 
 	unsigned int VAO, VBO;
@@ -171,7 +173,8 @@ int main()
 		}
 
 
-		// -- 4.2. Sending & Receiving Messages -- //		
+		// ---- Sending & Receiving Messages ---- //	
+			
 		// -- Receiving Data from Server -- //
 		int numBytesRead = 0;
 		sockaddr_in recvAddr;
@@ -184,6 +187,7 @@ int main()
 			else if (recvBuffer[0] == '1') // Actor replication
 				updateActors(recvBuffer, numBytesRead);
 		}
+
 		// -- Sending Data to Server -- //
 		char sendBuffer[2 + (MAX_ACTORS * sizeof(Actor))]; // I doubt command data will ever exceed this size
 		// No player actor --> The server hasn't given us one yet; we're not connected
@@ -315,6 +319,8 @@ void handleCommand(char* buffer, unsigned int bufferLen)
 		case '0':// Connection Reply
 		{
 			playerActor = Actor::deserialize(buffer, bufferLen);
+			playerActor->InitializeModel(gearFBX_path);
+			actorMap.insert({ playerActor->getId(), playerActor });
 			break;
 		}
 	}
