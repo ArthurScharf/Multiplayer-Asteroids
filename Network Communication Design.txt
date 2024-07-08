@@ -1,0 +1,10 @@
+Client 
+ - Must be able to continue to receive updates even when it's character is dead
+
+
+
+Client doesn't need to receive an entire actor back after requesting actor data. It only needs to know it's character's
+
+
+Server loop updates replicated data from each client back to all other clients.
+--> Each client just needs to know if it's controlling a player

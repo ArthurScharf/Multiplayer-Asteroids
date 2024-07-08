@@ -10,11 +10,13 @@
 // add headers that you want to pre-compile here
 #include "framework.h"
 
+#include <glad/glad.h>
 
 #include "Actor.h"
-#include "Vector.h"
+#include "Vector3D.h"
 #include "Serialization/Serializeable.h"
 #include "Serialization//Serializer.h"
 #include "UDPSocket.h"
+//#include "glad/glad.h" // Causes a problem when attempting to also include glad in other projects. Don't yet understand
 
 #endif //PCH_H
