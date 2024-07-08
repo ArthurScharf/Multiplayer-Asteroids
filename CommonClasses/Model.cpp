@@ -36,10 +36,21 @@ Model::Model(std::string const& path, bool gamma)
     position.z = 0.f;
 }
 
+Model::~Model()
+{
+
+}
+
 void Model::Draw(Shader& shader)
 {
-    for (unsigned int i = 0; i < meshes.size(); i++)
-        meshes[i].Draw(shader);
+    try {
+        for (unsigned int i = 0; i < meshes.size(); i++)
+            meshes[i].Draw(shader);
+    }
+    catch (std::exception e) {
+        std::cout << "Exception: " << e.what() << std::endl;
+    }
+
 }
 
 

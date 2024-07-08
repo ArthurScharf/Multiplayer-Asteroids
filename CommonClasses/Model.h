@@ -37,6 +37,7 @@ private:
 
 public:
     Model(std::string const& path, bool gamma = false);
+    ~Model();
     // draws the model, and thus all its meshes
     void Draw(Shader& shader);
 

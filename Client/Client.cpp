@@ -32,61 +32,15 @@ const float playerSpeed = 25.f; // The rate at which the player changes position
 
 // We need these here so updateActors can access them //
 //Actor* actors[MAX_PLAYERS]; // Allocates local memory for pointers to actor pointers
+/*
+* Key : The Actor's networkID
+* Value : The actor associated with said ID
+*/
 std::map<unsigned int, Actor*> actorMap;
 Actor* playerActor = nullptr;
 
 float deltaTime = 0.f;
 float lastFrame = 0.f;
-
-
-// -- Testing -- //
-// Each row is a position, and a normal
-float vertices[] = {
-	-0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-	 0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-	 0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-	 0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-	-0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-	-0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-
-	-0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-	 0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-	 0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-	 0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-	-0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-	-0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-
-	-0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
-	-0.5f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-	-0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-	-0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-	-0.5f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
-	-0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
-
-	 0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
-	 0.5f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-	 0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-	 0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-	 0.5f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
-	 0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
-
-	-0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
-	 0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
-	 0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-	 0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-	-0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-	-0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
-
-	-0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
-	 0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
-	 0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-	 0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-	-0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-	-0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f
-};
-
-
-
 
 
 
@@ -106,7 +60,7 @@ void handleCommand(char* buffer, unsigned int bufferLen);
 int main()
 {
 	// ---------- Game State ---------- //
-	// playerActor = (Actor*)malloc(sizeof(Actor)); // The actor controlled by the client
+	playerActor = nullptr;
 
 	// ---------- Networking ---------- //
 	UDPSocket sock;
@@ -121,11 +75,6 @@ int main()
 	PCWSTR str(wServerAddrStr);
 	InetPtonW(AF_INET, str, &(serverAddr.sin_addr));
 	serverAddr.sin_port = htons(6969);
-
-	// PROOF: We're storing the Server info correctly
-	//char ip[INET6_ADDRSTRLEN];
-	//inet_ntop(AF_INET, (sockaddr*)&serverAddr.sin_addr, ip, INET6_ADDRSTRLEN);
-	// printf("IP: %s   Port: %d", &ip, ntohs(serverAddr.sin_port));
 
 
 
@@ -156,6 +105,7 @@ int main()
 	// OpenGL Settings
 	glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
 	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LESS); // Explicitly stating the depth function to be used
 
 	// Compiling GLSL Shaders 
 	Shader shader(
@@ -163,11 +113,14 @@ int main()
 		"C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/GLSL Shaders/Fragment.txt"
 	);
 
+
+	// -- TEST -- //
 	Vector3D playerPosition(0.f);
 	Vector3D playerRotation(0.f);
 	playerActor = new Actor(playerPosition, playerRotation);
-	playerActor->InitializeModel("../CommonClasses/FBX/chair/chair.fbx");
-	
+	//playerActor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/chair/chair.fbx");
+	playerActor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx"); /* I don't understand why, but this MUST be called or an excpetion is thrown */
+	actorMap.insert({ playerActor->getId(), playerActor });
 
 	/* -- Used for testing -- 
 	unsigned int VAO, VBO;
@@ -210,7 +163,12 @@ int main()
 		projection = glm::perspective(glm::radians(camera.zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.f);
 		shader.setMat4("projection", projection);
 		
-		playerActor->Draw(shader);
+		auto iter = actorMap.begin();
+		while (iter != actorMap.end())
+		{
+			iter->second->Draw(shader);
+			++iter;
+		}
 
 
 		// -- 4.2. Sending & Receiving Messages -- //		
@@ -231,13 +189,18 @@ int main()
 		// No player actor --> The server hasn't given us one yet; we're not connected
 		if (!playerActor)
 		{
-			//printf("main -- Connecting");
 			sendBuffer[0] = '0'; // Connect
 			sock.sendData(sendBuffer, 1, serverAddr);
 		}
 		else
 		{
-			//printf("main -- Replicating");
+			// TODO: Command detection and sending.
+			/*
+			* The client should never actually send player actor data. 
+			* It should instead send information regarding which inputs the player
+			* is using. The client does it's own thing then receives data from the server
+			* it uses to correct any inconsistencies between it's assumptions and what the server allows
+			*/
 			Actor::serialize(sendBuffer, playerActor); // static method so knows how large buffer SHOULD be.
 			sock.sendData(sendBuffer, sizeof(Actor), serverAddr);
 		}
@@ -247,9 +210,6 @@ int main()
 	}
 
 	terminateProgram();
-
-
-
 
 	// Prevents window from closing too quickly. Good so I can see print statements
 	char temp[200];
@@ -285,7 +245,13 @@ void processInput(GLFWwindow* window)
 		movementDir += Vector3D(1.f, 0.f, 0.f);
 	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
 		movementDir += Vector3D(-1.f, 0.f, 0.f);
+	if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
+		movementDir += Vector3D(0.f, 0.f, -1.f);
+	if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
+		movementDir += Vector3D(0.f, 0.f, 1.f);
 	movementDir.Normalize();
+
+
 	playerActor->setPosition(playerActor->getPosition() + (movementDir * playerSpeed * deltaTime));
 }
 

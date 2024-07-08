@@ -71,12 +71,12 @@ Shader::Shader(const char* szVertexPath, const char* szFragmentPath)
 	glAttachShader(ID, fragment);
 	glLinkProgram(ID);
 
-	// prining linking errors if any
+	// printing linking errors if any
 	glGetProgramiv(ID, GL_LINK_STATUS, &success);
 	if (!success)
 	{
 		glGetProgramInfoLog(ID, 512, NULL, infoLog);
-		std::cout << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << std::endl;
+		std::cout << "ERROR::SHADER::PROGRAM::LINKING_FAILED -- " << infoLog << std::endl;
 	}
 
 	// delete shaders since they're linked into our program

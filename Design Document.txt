@@ -4,6 +4,7 @@ Move "Enter Server IP" code into loop so we don't need to restart client if serv
 Alter Socket code to allow for recvfrom to work. recvfrom is blocking and we need the client and
 the server to both send and receive data simultaneously. Note that we should avoid multiple threads
 
+Properly design the communication sequences between client and server then implement it
 
 
 

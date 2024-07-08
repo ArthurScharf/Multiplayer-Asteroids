@@ -13,14 +13,23 @@ Actor::Actor(Vector3D& position, Vector3D& rotation)
 
 
 Actor::Actor(Vector3D& position, Vector3D& rotation, unsigned int replicatedId)
-	: Position(position), Rotation(rotation), id(replicatedId)
+	 : Position(position), Rotation(rotation), id(replicatedId)
 {
-	model = new Model("../FBX/chair/chair.fbx");
+	model = nullptr; // Why is this insufficient to avoid a bug from loading? If I use InitializeModel() with it failing, the system doesnt throw any exceptions
+
+	/*
+	* BUG
+	* I think what's happening is this:
+	* Model being nullptr causes some kind of problem within a vector somewhere.
+	* Even a failed call InitializeModel will result in a non-null value
+	* This non-null value avoids the problem
+	*/
+
 }
 
 Actor::~Actor()
 {
-	delete model;
+	// if (model) delete model; // BUG: I'm getting a memory error related to how the memory is aligned, it seems. I'll allow a memory leak for now
 }
 
 std::string Actor::toString()
@@ -35,11 +44,14 @@ std::string Actor::toString()
 
 void Actor::InitializeModel(const std::string& path)
 {
-	model = new Model(path);
+	Model* temp = new Model(path);
+	if (temp) model = temp;
 }
 
 void Actor::Draw(Shader& shader)
 {
+	if (!model)
+		std::cout << "ERROR::Actor::Draw -- !model\n";
 	shader.setVec3("positionOffset", glm::vec3(Position.x, Position.y, Position.z));
 	model->Draw(shader);
 }
@@ -49,8 +61,6 @@ unsigned int Actor::serialize(char* buffer, Actor* actor)
 {
 	unsigned int bufferLen = sizeof(Actor); // Null terminating
 	
-	 std::cout << std::endl;
-
 	unsigned int actorId = actor->getId(); 
 	memcpy(buffer, &actorId, sizeof(unsigned int));
 	buffer += sizeof(unsigned int);
