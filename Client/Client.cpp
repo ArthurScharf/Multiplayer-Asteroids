@@ -1,3 +1,20 @@
+/**
+* NOTES
+* 
+* Serializing client inputs to be sent to server
+*	
+* 
+* 
+*/
+
+
+
+
+
+
+
+
+
 #pragma once
 
 #include <glad/glad.h>
@@ -9,6 +26,7 @@
 #include <tchar.h> // _T
 #include <thread>
 #include <map>
+#include <set>
 
 #include "Camera.h"
 
@@ -23,22 +41,45 @@
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
+
 bool bWinsockLoaded = false;
+
 
 // Camera
 Camera camera( glm::vec3(0.f, 0.f, 100.f) ); // Camera Position
 //Camera camera(0.f, 0.f, 100.f, 0.f, 1.f, 0.f, -90.f, 0.f);
+
+bool bConnectedToServer = false;
+
+
+
+
+/* There is a playerActorID and a playerActor pointer for the following reasons
+* 
+* Actors are spawned if the client receives actor replication and an actor is discovered
+* that it hasn't yet seen.
+* When a client connects, it is added to a list of clients on the server.
+* Once the server decides to spawn the player's actor, it will send to that client the network
+* id for that actor so the client can have it.
+* Rather than require that we send actor data to all clients for each spawn, we instead
+* simply replicate the newly created actor using the normal method; server cycle by server cycle.
+* This means there exists a state where the client has a controlled actor ID, but doesn't
+* yet have that actor to control.
+* 
+* NOTE: This feels convoluted. I should think about reworking this
+*/
+
+// A Map is used so we don't need to create an actor each time we parse actor data to see if that actor exists. We can just see if it's id has been placed in this map
+std::map<unsigned int, Actor*> actorMap;
+// Stores network ID for actor this client is controlling. Necessary bc a client can be connected without an actor
+unsigned int playerActorID = -1;
+// Pointer to actor being controlled by this client. Avoids repeated lookups using playerActorID
+Actor* playerActor = nullptr;
+
 const float playerSpeed = 25.f; // The rate at which the player changes position
 
-// We need these here so updateActors can access them //
-//Actor* actors[MAX_PLAYERS]; // Allocates local memory for pointers to actor pointers
-/*
-* Key : The Actor's networkID
-* Value : The actor associated with said ID
-*/
-std::map<unsigned int, Actor*> actorMap;
-Actor* playerActor = nullptr;
-unsigned int playerActorID = -1; 
+
+
 
 float deltaTime = 0.f;
 float lastFrame = 0.f;
@@ -51,7 +92,7 @@ const std::string gearFBX_path = "C:/Users/User/source/repos/Multiplayer-Asteroi
 void processInput(GLFWwindow* window);
 void terminateProgram();
 void updateActors(char* buffer, int bufferLen);
-void handleCommand(char* buffer, unsigned int bufferLen);
+void handleServerMessage(char* buffer, unsigned int bufferLen);
 
 
 /* It is the job of the client's main code to organize and denote the structure
@@ -62,9 +103,6 @@ void handleCommand(char* buffer, unsigned int bufferLen);
 // ---- CLIENT ---- //
 int main()
 {
-	// ---------- Game State ---------- //
-	playerActor = nullptr;
-
 	// ---------- Networking ---------- //
 	UDPSocket sock;
 	sock.init(false);
@@ -117,29 +155,10 @@ int main()
 	);
 
 
-	// -- TEST -- //
-	//Vector3D playerPosition(0.f);
-	//Vector3D playerRotation(0.f);
-	//playerActor = new Actor(playerPosition, playerRotation);
-	//playerActor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx"); /* I don't understand why, but this MUST be called or an excpetion is thrown */
-	//actorMap.insert({ playerActor->getId(), playerActor });
-
-	/* -- Used for testing -- 
-	unsigned int VAO, VBO;
-	glGenVertexArrays(1, &VAO);
-	glGenBuffers(1, &VBO);
-	glBindBuffer(GL_ARRAY_BUFFER, VBO);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-	glBindVertexArray(VAO);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
-	glEnableVertexAttribArray(0);
-	*/
-
 	// Main loop
 	while (!glfwWindowShouldClose(window))
 	{
+
 		// Per-frame logic
 		float currentFrame = static_cast<float>(glfwGetTime());
 		deltaTime = currentFrame - lastFrame;
@@ -147,7 +166,7 @@ int main()
 
 		processInput(window);
 
-		// -- 4.1. Rendering Actors -- //
+		// -- Rendering Actors -- //
 		glClearColor(0.1f, 0.1f, 0.1f, 1.f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -165,49 +184,42 @@ int main()
 		projection = glm::perspective(glm::radians(camera.zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.f);
 		shader.setMat4("projection", projection);
 		
-		auto iter = actorMap.begin();
-		while (iter != actorMap.end())
+		for (auto iter = actorMap.begin(); iter != actorMap.end(); ++iter)
 		{
 			iter->second->Draw(shader);
-			++iter;
-		}
-
-
-		// ---- Sending & Receiving Messages ---- //	
-			
-		// -- Receiving Data from Server -- //
-		int numBytesRead = 0;
-		sockaddr_in recvAddr;
-		char* recvBuffer{};
-		recvBuffer = sock.recvData(numBytesRead, recvAddr);
-		if (numBytesRead > 0) 
-		{
-			if (recvBuffer[0] == '0') // Command Received
-				handleCommand(++recvBuffer, numBytesRead); // We increment once before passing since the we don't need the 'command received' byte to be present
-			else if (recvBuffer[0] == '1') // Actor replication
-				updateActors(recvBuffer, numBytesRead);
 		}
 
 		// -- Sending Data to Server -- //
-		char sendBuffer[2 + (MAX_ACTORS * sizeof(Actor))]; // I doubt command data will ever exceed this size
+		char sendBuffer[1 + (MAX_ACTORS * sizeof(Actor))]; // I doubt command data will ever exceed this size
 		// No player actor --> The server hasn't given us one yet; we're not connected
-		if (!playerActor)
+		if (!bConnectedToServer)
 		{
-			sendBuffer[0] = '0'; // Connect
+			sendBuffer[0] = 'c'; // Connect
 			sock.sendData(sendBuffer, 1, serverAddr);
 		}
 		else
 		{
-			// TODO: Command detection and sending.
-			/*
-			* The client should never actually send player actor data. 
-			* It should instead send information regarding which inputs the player
-			* is using. The client does it's own thing then receives data from the server
-			* it uses to correct any inconsistencies between it's assumptions and what the server allows
-			*/
-			Actor::serialize(sendBuffer, playerActor); // static method so knows how large buffer SHOULD be.
-			sock.sendData(sendBuffer, sizeof(Actor), serverAddr);
+			// TODO: Send input to server
+
+
+
+
+
 		}
+
+
+
+		// -- Receiving Data from Server -- // Receives data from server regardless of state
+		int numBytesRead = 0;
+		sockaddr_in recvAddr;
+		char* recvBuffer{};
+		recvBuffer = sock.recvData(numBytesRead, recvAddr);
+		if (numBytesRead > 0)
+		{
+			handleServerMessage(recvBuffer, numBytesRead);
+		}
+
+
 
 		glfwPollEvents();
 		glfwSwapBuffers(window);
@@ -263,7 +275,9 @@ void processInput(GLFWwindow* window)
 void updateActors(char* buffer, int bufferLen)
 {
 
-	// TODO: It is no longer true that the first actor received is the actor belonging to this client. This method must be reworked
+	// TODO: Actor's must have a mesh instantiated when they're created. Data sent across must indicate the type of actor
+	//       Alternatively, we send spawn and destroy messages, which contain all the required actor data, including the type of actor
+
 
 	/* -- Schema -- 
 	*  0  - 3  : id
@@ -271,12 +285,12 @@ void updateActors(char* buffer, int bufferLen)
 	*  15 - 27 : rotation
 	*/
 
-	// Creating actor index and checking for invalid bufferLen
-	unsigned int numActors = -1;
-	float check = bufferLen / (float)sizeof(Actor); // BUG
+	// Creating numActors & Checking for invalid bufferLen
+	unsigned int numActorsReceived = -1;
+	float check = bufferLen / (float)sizeof(Actor);
 	if (check - floor(check) == 0.f)
-		numActors = (int)floor(check);
-	if (numActors == -1)
+		numActorsReceived = (int)floor(check);
+	if (numActorsReceived == -1)
 	{
 		std::cout << "Client::updateActors -- length of buffer not wholly divisible by sizeof(Actor)\n";
 		return;
@@ -284,9 +298,9 @@ void updateActors(char* buffer, int bufferLen)
 	
 	// -- Reading Actors -- //
 	Actor* actor;
-	for (unsigned int i = 0; i < numActors; i++)
+	for (unsigned int i = 0; i < numActorsReceived; i++)
 	{
-		unsigned int id = 0;
+		unsigned int id;
 		Vector3D position;
 		Vector3D rotation;
 		memcpy(&id, buffer, sizeof(unsigned int));
@@ -296,10 +310,10 @@ void updateActors(char* buffer, int bufferLen)
 		if (actorMap.count(id) == 0) // Actor not found
 		{
 			// Add actor to map
-			Actor* newActor = new Actor(position, rotation, id);
-			actorMap[id] = newActor;
-			if (!playerActor) // First time receiving actor data?
-				playerActor = newActor;
+			actor = new Actor(position, rotation, id);
+			actor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx");// TEMP			
+			actorMap[id] = actor;
+
 		}
 		else // Actor found. Updating Actor data
 		{
@@ -307,20 +321,40 @@ void updateActors(char* buffer, int bufferLen)
 			actor->setPosition(position);
 			actor->setRotation(rotation);
 		}
+
+		if (id != playerActorID && actor != playerActor)
+		{
+			printf("Client::updateActors -- Updating playerActor");
+			playerActor = actor;
+		}
 		buffer += sizeof(Actor);
 	}
 }
 
 
-void handleCommand(char* buffer, unsigned int bufferLen)
+void handleServerMessage(char* buffer, unsigned int bufferLen)
 {
 	switch (buffer[0]) 
 	{
-		case '0':// Connection Reply
+		case 'c':	// Connection Reply
 		{
-			playerActor = Actor::deserialize(buffer, bufferLen);
-			playerActor->InitializeModel(gearFBX_path);
-			actorMap.insert({ playerActor->getId(), playerActor });
+			std::cout << "Successfully connected\n";
+			bConnectedToServer = true;
+			break;
+		}
+		case 'r':	// Replicating
+		{
+			/* Updates actor states to match server data.
+			*  Spawns actors that were sent to client, but don't yet exist
+			*/
+			std::cout << "Replicating Actor Data\n";
+			updateActors(++buffer, --bufferLen);
+			break;
+		}
+		case 'i':	// Receiving Controlled Actor ID
+		{
+			memcpy(&playerActorID, ++buffer, sizeof(unsigned int));
+			std::cout << "Receiving playerActorID: " << playerActorID << std::endl;
 			break;
 		}
 	}
@@ -332,3 +366,5 @@ void terminateProgram()
 	if (bWinsockLoaded) WSACleanup();
 	glfwTerminate();
 }
+
+

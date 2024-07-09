@@ -4,7 +4,9 @@ Move "Enter Server IP" code into loop so we don't need to restart client if serv
 Alter Socket code to allow for recvfrom to work. recvfrom is blocking and we need the client and
 the server to both send and receive data simultaneously. Note that we should avoid multiple threads
 
-Properly design the communication sequences between client and server then implement it
+
+
+
 
 
 
@@ -166,5 +168,19 @@ Question: What are the advantages of the Model storing the shader?
  BUT all the shaders need to have global lights set. These lights affect all the actors.
  While it would be feasible to set light parameters within each shader through each actor, this seems like an
  extra step.
+
+
+
+
+
+---- Serialized client input Design ----
+We must serialize user input so it can be read by server and be replicated back to all clients
+
+PROBLEM: What if I want to include new input possibilities? I need a solution that can be easily extended
+ --> Define a maximum size for data to be sent. Define an efficient encoding schema. new inputs can be extended to use unused space
+
+
+
+
 
 Solution: Shaders are stored as globally as possible; in the client. 

@@ -107,11 +107,10 @@ void UDPSocket::sendData(const char* buffer, unsigned int bufferLen, sockaddr_in
 	
 }
 
-/*
-* TODO: chatGPT lied. recvfrom IS blocking. We'll need to start a seperate thread
-*/
+
 char* UDPSocket::recvData(int& numBytesRead, sockaddr_in& sendingSockAddr)
 {
+	numBytesRead = 0;
 	//std::cout << "UDPSocket::recvData\n";
 	char* buffer = (char*)malloc(BUFFER_SIZE);
 	int sockAddr_len = sizeof(sendingSockAddr);

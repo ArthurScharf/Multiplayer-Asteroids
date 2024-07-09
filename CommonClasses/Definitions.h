@@ -2,7 +2,7 @@
 
 
 #define MAX_PLAYERS 4
-#define MAX_ACTORS 20 
+#define MAX_ACTORS 255 
 
 
 

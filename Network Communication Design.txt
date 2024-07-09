@@ -1,10 +1,59 @@
+----- Instruction List -----
+'c' : connect
+  To Server --> Request to be added to list of connected clients and be updated with game state
+  To Client --> Confirmation that Client has been added to game state
+
+
+'r' : replication
+  To Server --> Input data from the client. Uses input data to update clients controlled actor
+  To Client --> Actor data for all live actors. Client updates autonomous proxies with this data
+
+
+'i' : new controlled actor id
+  To Server --> Unhandled
+  TO Client --> Contains ID for newly controlled actor
+
+
+
+----------------------------
+
+
+
+
+
+
 Client 
  - Must be able to continue to receive updates even when it's character is dead
-
-
 
 Client doesn't need to receive an entire actor back after requesting actor data. It only needs to know it's character's
 
 
+
 Server loop updates replicated data from each client back to all other clients.
---> Each client just needs to know if it's controlling a player
+--> Each client just needs to know if it's controlling an Actor
+
+How then to store connection state of client with server?
+--> What are the states of the client?
+
+Client States (STATE: * , OCCURENCE: -)
+ * Not connected (Attempting to connect)
+ * Connected
+   - Receiving Replication of Actors (TESTABLE. CREATE AND REPLICATE SERVER SIDE ACTORS TO CLIENTS)
+   * No Assigned Actor
+	- Waiting for an actor to be assigned from an ID sent from server
+   * Assigned Actor
+	- Moving Actor 
+	- Sending Player input
+	- Correcting discrepancies between controlled actor state and server state of said actor
+
+
+How do I represent each state?
+ * Not Connected --> stored server IP. (Timer that, upon failing to receive packet after certain amount of time, disconnects?)
+ * Connected --> Stored server IP
+   * No Assigned Actor --> controlled actor ID == -1;
+   * Assigned Actor --> Controlled actor ID >= 0;
+
+
+
+
+
