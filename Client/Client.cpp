@@ -153,7 +153,6 @@ int main()
 	// Main loop
 	while (!glfwWindowShouldClose(window))
 	{
-
 		// Per-frame logic
 		float currentFrame = static_cast<float>(glfwGetTime());
 		deltaTime = currentFrame - lastFrame;
@@ -171,14 +170,12 @@ int main()
 		glm::mat4 view = glm::mat4(1.f);
 		glm::mat4 projection = glm::mat4(1.f);
 
-		// Vertex Transformation
 		model = glm::translate(model, glm::vec3(0.f));
 		shader.setMat4("model", model);
 		view = camera.GetViewMatrix();
 		shader.setMat4("view", view);
 		projection = glm::perspective(glm::radians(camera.zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.f);
 		shader.setMat4("projection", projection);
-		
 		for (auto iter = actorMap.begin(); iter != actorMap.end(); ++iter)
 		{
 			iter->second->Draw(shader);
@@ -192,16 +189,6 @@ int main()
 			sendBuffer[0] = 'c'; // Connect
 			sock.sendData(sendBuffer, 1, serverAddr);
 		}
-		else
-		{
-			// TODO: Send input to server
-
-
-
-
-
-		}
-
 
 
 		// -- Receiving Data from Server -- // Receives data from server regardless of state
@@ -312,14 +299,15 @@ void updateActors(char* buffer, int bufferLen)
 		{
 			// Add actor to map
 			actor = new Actor(position, rotation, id);
-			if ((alternatingModelIndex % 2) == 0)
-			{
-				actor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx");// TEMP			
-			}
-			else
-			{
-				actor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/chair/chair.fbx");// TEMP			
-			}
+			//if ((alternatingModelIndex % 2) == 0)
+			//{
+			//	actor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx");// TEMP			
+			//}
+			//else
+			//{
+			//	actor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/chair/chair.fbx");// TEMP			
+			//}
+			actor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx");// TEMP			
 			alternatingModelIndex++;
 			actorMap[id] = actor;
 
@@ -329,7 +317,7 @@ void updateActors(char* buffer, int bufferLen)
 			actor = actorMap[id];
 			actor->setPosition(position);
 			actor->setRotation(rotation);
-			// std::cout << actor->toString() << std::endl;
+			//std::cout << actor->toString() << std::endl;
 		}
 
 
@@ -340,8 +328,6 @@ void updateActors(char* buffer, int bufferLen)
 		}
 		buffer += sizeof(Actor);
 	}
-	std::cout << "\n";
-
 }
 
 

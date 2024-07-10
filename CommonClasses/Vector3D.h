@@ -54,3 +54,11 @@ static Vector3D operator*(Vector3D v, float f)
 	v.z *= f;
 	return v;
 }
+
+static Vector3D operator*(float f, Vector3D v)
+{
+	v.x *= f;
+	v.y *= f;
+	v.z *= f;
+	return v;
+}
