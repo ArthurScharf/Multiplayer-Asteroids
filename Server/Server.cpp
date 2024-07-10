@@ -36,9 +36,11 @@ public:
 };
 
 
+float deltaTime = 0.f;
+
 
 #define MAX_CLIENTS 4
-std::map<ipAddress*, Actor*> clients;
+std::map<ipAddress, Actor*> clients;
 unsigned int numClients = 0;
 
 
@@ -71,11 +73,13 @@ int main()
 	Vector3D testPos(-.5f, 0.f, 0.f);
 	Vector3D testRot(0.f);
 	createActor(testPos, testRot);
-
-	//std::chrono::steady_clock::time_point start = std::chrono::high_resolution_clock::now();
-	//std::chrono::steady_clock::time_point end;
-	//float seconds = 0.f;
 	//----
+
+
+	std::chrono::steady_clock::time_point start = std::chrono::high_resolution_clock::now();
+	std::chrono::steady_clock::time_point end;
+
+
 
 	char sendBuffer[1 + (MAX_ACTORS * sizeof(Actor))]{};
 	sockaddr_in clientAddr;
@@ -86,9 +90,12 @@ int main()
 
 	while (true)
 	{
-		// -- Testing -- // QUESTION: What is the relationship between deltaTime and glfwGetTime() 
-		//end = std::chrono::high_resolution_clock::now();
-		//seconds = (end - start).count() / 1000000000.f;	// nanoseconds to seconds	
+		// -- Delta Time -- //	
+		end = start;
+		start = std::chrono::high_resolution_clock::now();
+		deltaTime = (start - end).count() / 1000000000.f;	// nanoseconds to seconds
+
+		// -- Testing -- //
 		////std::cout << seconds << std::endl;
 		//int sign = 1; 
 		//printf("numActors: %d\n", numActors);
@@ -126,7 +133,7 @@ int main()
 				/* QUESTION: Why would memcpy ing using the below line result in an exception being thrown ??? */
 				//memcpy(sendBuffer + 1, (void*)clients[iter->first]->getId(), sizeof(unsigned int));
 
-				clientAddr.sin_addr = iter->first->_in_addr;
+				clientAddr.sin_addr = iter->first._in_addr;
 				clientAddr.sin_family = AF_INET;
 				clientAddr.sin_port = htons(4242);
 				sock.sendData(sendBuffer, 1 + sizeof(unsigned int), clientAddr);
@@ -148,8 +155,8 @@ int main()
 				{
 					std::cout << "client connected\n"; // TODO: print client IP address
 					// Storing client ip address
-					ipAddress* ip = new ipAddress;
-					ip->_in_addr = clientAddr.sin_addr;
+					ipAddress ip;
+					ip._in_addr = clientAddr.sin_addr;
 					clients.insert({ ip, nullptr });
 					numClients++;
 					// replying to message
@@ -166,15 +173,20 @@ int main()
 					// That I must construct one of these feels code smelly
 					ipAddress ipAddr;
 					ipAddr._in_addr = clientAddr.sin_addr;
-					if (clients.count(&ipAddr) == 0)
+					if (clients.count(ipAddr) == 0)
 					{
 						std::cout << "Server::main/receiving_data -- received replication of input from unknown client. Ignoring";
 						break;
 					}
+					if (clients[ipAddr] == nullptr)
+					{
+						// The client attempting to replicate has no actor to move
+						break; 
+					}
 					Vector3D movementDir;
 					memcpy(&movementDir, recvBuffer + 1, sizeof(Vector3D));
-
-
+					Actor* actor = clients[ipAddr];
+					actor->setPosition(actor->getPosition() + (250.f * movementDir * deltaTime));
 					break;
 				}
 			}
@@ -195,7 +207,7 @@ int main()
 		// - Replicating
 		for (auto it = clients.begin(); it != clients.end(); ++it)
 		{	
-			clientAddr.sin_addr = it->first->_in_addr;
+			clientAddr.sin_addr = it->first._in_addr;
 			sock.sendData(sendBuffer, bufferLen, clientAddr);
 		}	
 	};
