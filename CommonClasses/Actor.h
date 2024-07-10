@@ -10,8 +10,7 @@
 
 
 
-/* ID's are shared across the network */
-static unsigned int nextId;
+
 
 /*
 * This actor class implements the networking interface
@@ -20,7 +19,9 @@ class Actor
 {
 // -- Members -- //
 private:
-	unsigned int id; // 4
+	/* ID's are shared across the network */
+	static unsigned int nextId;
+	const unsigned int id; // 4
 	Vector3D Position; // 12
 	Vector3D Rotation; // Should be a rotator. For now, is a Vector3D
 	//Mesh mesh; TODO 

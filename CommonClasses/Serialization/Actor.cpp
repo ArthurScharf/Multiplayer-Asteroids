@@ -6,10 +6,11 @@
 #include <cstdio>
 
 
+unsigned int Actor::nextId = 0;
+
 Actor::Actor(Vector3D& position, Vector3D& rotation)
-{
-	Actor(position, rotation, nextId++);
-}
+	: Position(position), Rotation(rotation), id(nextId++)
+{}
 
 
 Actor::Actor(Vector3D& position, Vector3D& rotation, unsigned int replicatedId)
@@ -24,7 +25,6 @@ Actor::Actor(Vector3D& position, Vector3D& rotation, unsigned int replicatedId)
 	* Even a failed call InitializeModel will result in a non-null value
 	* This non-null value avoids the problem
 	*/
-
 }
 
 Actor::~Actor()

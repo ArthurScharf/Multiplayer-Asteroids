@@ -1,3 +1,4 @@
+#include <chrono>
 
 #include <iostream>
 #include <map>
@@ -6,6 +7,8 @@
 #include <thread>
 #include <WinSock2.h>
 #include <WS2tcpip.h> // inetPtons
+
+
 
 #include "../CommonClasses/Actor.h"
 #include "../CommonClasses/Definitions.h"
@@ -53,8 +56,7 @@ Actor* createActor(Vector3D& pos, Vector3D& rot);
 *  Decrements numActors.
 *  removes the created actor from actors
 */
-void destroyActor(Actor* actor);
-
+// TODO: Implement Destroy Actor
 
 
 
@@ -65,15 +67,42 @@ int main()
 	sock.init(true);
 
 
+	// -- Testing -- //
+	Vector3D testPos(-.5f, 0.f, 0.f);
+	Vector3D testRot(0.f);
+	createActor(testPos, testRot);
+
+	//std::chrono::steady_clock::time_point start = std::chrono::high_resolution_clock::now();
+	//std::chrono::steady_clock::time_point end;
+	//float seconds = 0.f;
+	//----
+
 	char sendBuffer[1 + (MAX_ACTORS * sizeof(Actor))]{};
 	sockaddr_in clientAddr;
 	clientAddr.sin_family = AF_INET;
 	clientAddr.sin_port = htons(4242);
-
 	int clientAddr_len = sizeof(clientAddr);
+
+
 	while (true)
 	{
+		// -- Testing -- // QUESTION: What is the relationship between deltaTime and glfwGetTime() 
+		//end = std::chrono::high_resolution_clock::now();
+		//seconds = (end - start).count() / 1000000000.f;	// nanoseconds to seconds	
+		////std::cout << seconds << std::endl;
+		//int sign = 1; 
+		//printf("numActors: %d\n", numActors);
+		//for (unsigned int i = 0; i < numActors; i++)
+		//{
+		//	Vector3D tempPos((float)sin(seconds), (float)cos(seconds), 0.f);
+		//	actors[i]->setPosition(tempPos * sign * 10.f);
+		//	sign *= -1;
+		//	//std::cout << tempPos.toString() << std::endl;
+		//}
+		//---- Testing -----//
 
+
+		// BUG: There are two actors being created when we create an actor here
 		// -- Checking for spawn/respawn of player characters -- //
 		auto iter = clients.begin();
 		while (iter != clients.end())
@@ -85,6 +114,10 @@ int main()
 				Vector3D position(0.f);
 				Vector3D rotation(0.f);
 				iter->second = createActor(position, rotation);
+				// QUESTION: Why would creating an actor in this way result in a nullptr error when trying to replicate
+				//iter->second = new Actor(position, rotation);
+				//numActors++;
+				//actors[numActors] = iter->second;
 
 				// -- Sending actor ID to client -- //
 				sendBuffer[0] = 'i';
@@ -93,13 +126,12 @@ int main()
 				/* QUESTION: Why would memcpy ing using the below line result in an exception being thrown ??? */
 				//memcpy(sendBuffer + 1, (void*)clients[iter->first]->getId(), sizeof(unsigned int));
 
-
 				clientAddr.sin_addr = iter->first->_in_addr;
 				clientAddr.sin_family = AF_INET;
 				clientAddr.sin_port = htons(4242);
 				sock.sendData(sendBuffer, 1 + sizeof(unsigned int), clientAddr);
-				iter++;
 			}
+			iter++;
 		}
 
 
@@ -109,33 +141,44 @@ int main()
 		char* recvBuffer = sock.recvData(numBytesRead, clientAddr);
 		if (numBytesRead > 0) // Received Anything?
 		{
-			printf("Message: %c\n", recvBuffer[0]);
 			switch (recvBuffer[0]) // Instruction Received
 			{
-				// connect. Client wants to be added to list of connected clients
-			case 'c':
-			{
-				std::cout << "client connected\n"; // TODO: print client IP address
-				// Storing client ip address
-				ipAddress* ip = new ipAddress;
-				ip->_in_addr = clientAddr.sin_addr;
-				clients.insert({ ip, nullptr });
-				// replying to message
+					// connect. Client wants to be added to list of connected clients
+				case 'c':
+				{
+					std::cout << "client connected\n"; // TODO: print client IP address
+					// Storing client ip address
+					ipAddress* ip = new ipAddress;
+					ip->_in_addr = clientAddr.sin_addr;
+					clients.insert({ ip, nullptr });
+					numClients++;
+					// replying to message
 
-				sendBuffer[0] = 'c';
-				sock.sendData(sendBuffer, 1, clientAddr);
-				break;
-			}
-			case 'r':
-			{
-				// Receives client inputs and uses them to update the state of that client's playerActor
+					sendBuffer[0] = 'c';
+					sock.sendData(sendBuffer, 1, clientAddr);
+					break;
+				}
+				case 'r':
+				{
+					// Receives client inputs and uses them to update the state of that client's playerActor
+					// TODO: Handle rotation and action inputs like quitting or shooting
+					
+					// That I must construct one of these feels code smelly
+					ipAddress ipAddr;
+					ipAddr._in_addr = clientAddr.sin_addr;
+					if (clients.count(&ipAddr) == 0)
+					{
+						std::cout << "Server::main/receiving_data -- received replication of input from unknown client. Ignoring";
+						break;
+					}
+					Vector3D movementDir;
+					memcpy(&movementDir, recvBuffer + 1, sizeof(Vector3D));
 
-				break;
-			}
+
+					break;
+				}
 			}
 		}
-
-
 
 		// -- Actor replication -- //
 		// - Packing actor data
@@ -158,6 +201,11 @@ int main()
 	};
 
 	WSACleanup();
+
+	// Prevents window from closing too quickly. Good so I can see print statements
+	char temp[200];
+	std::cin >> temp;
+
 	return 0;
 };
 
@@ -170,7 +218,4 @@ Actor* createActor(Vector3D& pos, Vector3D& rot)
 	return actors[numActors-1];
 }
 
-void destrorActor(Actor* actor)
-{
-	// TODO
-}
+

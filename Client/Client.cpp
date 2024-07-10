@@ -49,9 +49,10 @@ bool bWinsockLoaded = false;
 Camera camera( glm::vec3(0.f, 0.f, 100.f) ); // Camera Position
 //Camera camera(0.f, 0.f, 100.f, 0.f, 1.f, 0.f, -90.f, 0.f);
 
+
+UDPSocket sock;
+sockaddr_in serverAddr;
 bool bConnectedToServer = false;
-
-
 
 
 /* There is a playerActorID and a playerActor pointer for the following reasons
@@ -79,8 +80,6 @@ Actor* playerActor = nullptr;
 const float playerSpeed = 25.f; // The rate at which the player changes position
 
 
-
-
 float deltaTime = 0.f;
 float lastFrame = 0.f;
 
@@ -104,11 +103,8 @@ void handleServerMessage(char* buffer, unsigned int bufferLen);
 int main()
 {
 	// ---------- Networking ---------- //
-	UDPSocket sock;
 	sock.init(false);
-
 	/* Properly formatting received IP address string and placing it in sockaddr_in struct */
-	sockaddr_in serverAddr;
 	serverAddr.sin_family = AF_INET;
 	std::cout << "Enter server IP address: ";
 	wchar_t wServerAddrStr[INET_ADDRSTRLEN];
@@ -116,7 +112,6 @@ int main()
 	PCWSTR str(wServerAddrStr);
 	InetPtonW(AF_INET, str, &(serverAddr.sin_addr));
 	serverAddr.sin_port = htons(6969);
-
 
 
 	// ---------- OpenGL ---------- //
@@ -219,8 +214,6 @@ int main()
 			handleServerMessage(recvBuffer, numBytesRead);
 		}
 
-
-
 		glfwPollEvents();
 		glfwSwapBuffers(window);
 	}
@@ -267,11 +260,17 @@ void processInput(GLFWwindow* window)
 		movementDir += Vector3D(0.f, 0.f, 1.f);
 	movementDir.Normalize();
 
-
-	playerActor->setPosition(playerActor->getPosition() + (movementDir * playerSpeed * deltaTime));
+	// TODO: modify to handle input bit and handle masking of inputs above
+	char sendBuffer[sizeof(Vector3D) + 1]{ 0 }; // Schema: movement input, other keyboard like quitting or shooting
+	sendBuffer[0] = 'r'; // 'r' --> actor replication
+	memcpy(sendBuffer + 1, &movementDir, sizeof(Vector3D)); // Copying movement direction
+	sock.sendData(sendBuffer, sizeof(Vector3D) + 1, serverAddr);
+	//playerActor->setPosition(playerActor->getPosition() + (movementDir * playerSpeed * deltaTime));
 }
 
 
+
+int alternatingModelIndex = 0; // TEMP
 void updateActors(char* buffer, int bufferLen)
 {
 
@@ -296,6 +295,8 @@ void updateActors(char* buffer, int bufferLen)
 		return;
 	}
 	
+	//std::cout << numActorsReceived << std::endl;
+
 	// -- Reading Actors -- //
 	Actor* actor;
 	for (unsigned int i = 0; i < numActorsReceived; i++)
@@ -311,7 +312,15 @@ void updateActors(char* buffer, int bufferLen)
 		{
 			// Add actor to map
 			actor = new Actor(position, rotation, id);
-			actor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx");// TEMP			
+			if ((alternatingModelIndex % 2) == 0)
+			{
+				actor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx");// TEMP			
+			}
+			else
+			{
+				actor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/chair/chair.fbx");// TEMP			
+			}
+			alternatingModelIndex++;
 			actorMap[id] = actor;
 
 		}
@@ -320,15 +329,19 @@ void updateActors(char* buffer, int bufferLen)
 			actor = actorMap[id];
 			actor->setPosition(position);
 			actor->setRotation(rotation);
+			// std::cout << actor->toString() << std::endl;
 		}
 
-		if (id != playerActorID && actor != playerActor)
+
+		if (id == playerActorID && actor != playerActor)
 		{
 			printf("Client::updateActors -- Updating playerActor");
 			playerActor = actor;
 		}
 		buffer += sizeof(Actor);
 	}
+	std::cout << "\n";
+
 }
 
 
@@ -347,7 +360,7 @@ void handleServerMessage(char* buffer, unsigned int bufferLen)
 			/* Updates actor states to match server data.
 			*  Spawns actors that were sent to client, but don't yet exist
 			*/
-			std::cout << "Replicating Actor Data\n";
+			// std::cout << "Replicating Actor Data\n";
 			updateActors(++buffer, --bufferLen);
 			break;
 		}
