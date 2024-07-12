@@ -74,6 +74,9 @@
     <IncludePath>C:\Users\User\source\repos\Multiplayer-Asteroids\Include\assimp\Include;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glad\include;C:\Users\User\C &amp; C++ Libraries\glfw-3.4\include;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glm-1.0.1;$(IncludePath)</IncludePath>
     <LibraryPath>C:\Users\User\source\repos\Multiplayer-Asteroids\Libraries;C:\Users\User\source\repos\Multiplayer-Asteroids\Libraries\glfw3.lib;C:\Users\User\C &amp; C++ Libraries\assimp\Build\lib\Debug;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ExecutablePath>C:\Users\User\source\repos\Multiplayer-Asteroids\Include\assimp\Include;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glad\include;C:\Users\User\C &amp; C++ Libraries\glfw-3.4\include;C:\Users\User\source\repos\Multiplayer-Asteroids\Include\glm-1.0.1;$(IncludePath)</ExecutablePath>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>

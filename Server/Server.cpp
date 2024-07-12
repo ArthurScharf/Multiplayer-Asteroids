@@ -8,12 +8,14 @@
 #include <WinSock2.h>
 #include <WS2tcpip.h> // inetPtons
 
-
-
 #include "../CommonClasses/Actor.h"
 #include "../CommonClasses/Definitions.h"
 #include "../CommonClasses/Vector3D.h"
 #include "../CommonClasses/UDPSocket.h"
+
+
+
+
 
 
 // Linking (What does this have to do with linking????
@@ -65,21 +67,13 @@ Actor* createActor(Vector3D& pos, Vector3D& rot);
 // ---- SERVER ---- //
 int main()
 {
+	bool bTesting = true; // TEMP
+
 	UDPSocket sock;
 	sock.init(true);
 
-
-	// -- Testing -- //
-	Vector3D testPos(-.5f, 0.f, 0.f);
-	Vector3D testRot(0.f);
-	createActor(testPos, testRot);
-	//----
-
-
 	std::chrono::steady_clock::time_point start = std::chrono::high_resolution_clock::now();
 	std::chrono::steady_clock::time_point end;
-
-
 
 	char sendBuffer[1 + (MAX_ACTORS * sizeof(Actor))]{};
 	sockaddr_in clientAddr;
@@ -94,20 +88,8 @@ int main()
 		end = start;
 		start = std::chrono::high_resolution_clock::now();
 		deltaTime = (start - end).count() / 1000000000.f;	// nanoseconds to seconds
-
-		// -- Testing -- //
-		////std::cout << seconds << std::endl;
-		//int sign = 1; 
-		//printf("numActors: %d\n", numActors);
-		//for (unsigned int i = 0; i < numActors; i++)
-		//{
-		//	Vector3D tempPos((float)sin(seconds), (float)cos(seconds), 0.f);
-		//	actors[i]->setPosition(tempPos * sign * 10.f);
-		//	sign *= -1;
-		//	//std::cout << tempPos.toString() << std::endl;
-		//}
-		//---- Testing -----//
-
+		// std::cout << deltaTime << std::endl;
+		
 
 		// BUG: There are two actors being created when we create an actor here
 		// -- Checking for spawn/respawn of player characters -- //
@@ -142,7 +124,6 @@ int main()
 		}
 
 
-
 		// -- Receiving Data -- //
 		int numBytesRead;
 		char* recvBuffer = sock.recvData(numBytesRead, clientAddr);
@@ -167,9 +148,9 @@ int main()
 				}
 				case 'r':
 				{
+					//std::cout << "Server::main -- Received client replication" << std::endl;
 					// Receives client inputs and uses them to update the state of that client's playerActor
 					// TODO: Handle rotation and action inputs like quitting or shooting
-					
 					// That I must construct one of these feels code smelly
 					ipAddress ipAddr;
 					ipAddr._in_addr = clientAddr.sin_addr;
@@ -186,7 +167,18 @@ int main()
 					Vector3D movementDir;
 					memcpy(&movementDir, recvBuffer + 1, sizeof(Vector3D));
 					Actor* actor = clients[ipAddr];
-					actor->setPosition(actor->getPosition() + (250.f * movementDir * deltaTime));
+					actor->setPosition(actor->getPosition() + (700.f * movementDir * deltaTime));
+					break;
+				}
+				case 't': // Case used for testing. Should not be in the finals build
+				{
+					if (bTesting)
+					{
+						bTesting = false;
+						std::cout << "receiving test\n";
+						sendBuffer[0] = 't';
+						sock.sendData(sendBuffer, 1, clientAddr);
+					}
 					break;
 				}
 			}
@@ -204,12 +196,14 @@ int main()
 		}
 		unsigned int bufferLen = 1 + (numActors * sizeof(Actor));
 
-		// - Replicating
+		if (numClients <= 0) continue;
+		
 		for (auto it = clients.begin(); it != clients.end(); ++it)
-		{	
+		{
 			clientAddr.sin_addr = it->first._in_addr;
 			sock.sendData(sendBuffer, bufferLen, clientAddr);
-		}	
+		}
+		
 	};
 
 	WSACleanup();

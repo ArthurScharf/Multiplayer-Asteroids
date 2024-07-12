@@ -180,7 +180,29 @@ PROBLEM: What if I want to include new input possibilities? I need a solution th
  --> Define a maximum size for data to be sent. Define an efficient encoding schema. new inputs can be extended to use unused space
 
 
-
-
-
 Solution: Shaders are stored as globally as possible; in the client. 
+
+
+
+
+
+
+
+
+---- PROBLEM: There is latency between the client and server ----
+Hypothesis:
+ UDP sockets have a buffer for messages. My server is much faster than the client. The server is sending an actor replication
+ message each cycle, which will fill up the buffer on the client side.
+ The internet has told me that if a message arrives and there is no room in the buffer, said message is dropped without error.
+ Since the server is much faster than the client, the messages that contain updated player position are being buried and sometimes 
+ lost behind a wall of the previous message
+
+Solution: 
+ Each time a message needs to be read, rip messages until we find a message of the type we desire or,
+ the better choice, read every message from the buffer until we read the last message, then use that.
+
+PROBLEM: some of the packets stored in the buffer are not state updates and thus, cannot be discarded.
+
+SOLUTION: Each frame with the client, have said client read ALL the packets in the buffer and store them based on their message type.
+          For packets that store game state update data, simply choose the discard all the messages that aren't the most recently 
+          received packet

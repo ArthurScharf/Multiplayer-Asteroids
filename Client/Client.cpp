@@ -41,6 +41,8 @@
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
+const unsigned int NUM_PACKETS_PER_CYCLE = 50;
+
 
 bool bWinsockLoaded = false;
 
@@ -92,6 +94,15 @@ void processInput(GLFWwindow* window);
 void terminateProgram();
 void updateActors(char* buffer, int bufferLen);
 void handleServerMessage(char* buffer, unsigned int bufferLen);
+
+
+
+// TESTING
+float diff = 0.f;
+float currTime;
+float lastTime;
+bool bTesting = true;
+
 
 
 /* It is the job of the client's main code to organize and denote the structure
@@ -150,13 +161,14 @@ int main()
 	);
 
 
-	// Main loop
+	// ---------- Main loop ---------- //
 	while (!glfwWindowShouldClose(window))
 	{
 		// Per-frame logic
 		float currentFrame = static_cast<float>(glfwGetTime());
 		deltaTime = currentFrame - lastFrame;
 		lastFrame = currentFrame;
+		// std::cout << deltaTime << std::endl;
 
 		processInput(window);
 
@@ -193,9 +205,18 @@ int main()
 
 		// -- Receiving Data from Server -- // Receives data from server regardless of state
 		int numBytesRead = 0;
-		sockaddr_in recvAddr;
+		sockaddr_in recvAddr; // This is never used
 		char* recvBuffer{};
-		recvBuffer = sock.recvData(numBytesRead, recvAddr);
+		char* tempBuffer{};
+		// TEST: Trying to catch client up to the server
+		for (int i = 0; i < NUM_PACKETS_PER_CYCLE; i++)
+		{
+			tempBuffer = sock.recvData(numBytesRead, recvAddr);
+			if (*tempBuffer != 'r') handleServerMessage(tempBuffer, numBytesRead);
+
+			if (numBytesRead == 0) break;
+			recvBuffer = tempBuffer;
+		}
 		if (numBytesRead > 0)
 		{
 			handleServerMessage(recvBuffer, numBytesRead);
@@ -217,44 +238,68 @@ int main()
 
 void processInput(GLFWwindow* window)
 {
+	bool bSendInput = false;
+
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, true);
 	if (playerActor == nullptr) return; 
 
-	// -- Camera Testing -- //
-	//if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-	//	camera.position += glm::vec3(0.f, 1.f, 0.f)  * playerSpeed * deltaTime;
-	//if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-	//	camera.position += glm::vec3(0.f, -1.f, 0.f) * playerSpeed * deltaTime;
-	//if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-	//	camera.position += glm::vec3(1.f, 0.f, 0.f) * playerSpeed * deltaTime;
-	//if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-	//	camera.position += glm::vec3(-1.f, 0.f, 0.f) * playerSpeed * deltaTime;
-	//printf("%.4f, %.4f, %.4f", camera.position.x, camera.position.y, camera.position.z);
+
 	
 	Vector3D movementDir;
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+	{
 		movementDir += Vector3D(0.f, 1.f, 0.f);
+		bSendInput = true;
+		// TEST 
+		if (bTesting)
+		{
+			lastTime = glfwGetTime();
+			bTesting = false;
+			std::cout << "Sending test" << std::endl;
+			char sendBuffer[] = { 't' };
+			sock.sendData(sendBuffer, 1, serverAddr);
+			return;
+		}
+	}
 	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+	{
 		movementDir += Vector3D(0.f, -1.f, 0.f);
+		bSendInput = true;
+	}
 	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+	{
 		movementDir += Vector3D(1.f, 0.f, 0.f);
+		bSendInput = true;
+	}
 	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+	{
 		movementDir += Vector3D(-1.f, 0.f, 0.f);
+		bSendInput = true;
+	}
 	if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
+	{
 		movementDir += Vector3D(0.f, 0.f, -1.f);
+		bSendInput = true;
+	}
 	if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
+	{
 		movementDir += Vector3D(0.f, 0.f, 1.f);
+		bSendInput = true;
+	}
 	movementDir.Normalize();
 
-	// TODO: modify to handle input bit and handle masking of inputs above
-	char sendBuffer[sizeof(Vector3D) + 1]{ 0 }; // Schema: movement input, other keyboard like quitting or shooting
-	sendBuffer[0] = 'r'; // 'r' --> actor replication
-	memcpy(sendBuffer + 1, &movementDir, sizeof(Vector3D)); // Copying movement direction
-	sock.sendData(sendBuffer, sizeof(Vector3D) + 1, serverAddr);
-	//playerActor->setPosition(playerActor->getPosition() + (movementDir * playerSpeed * deltaTime));
-}
+	if (bSendInput)
+	{
+		// TODO: modify to handle input bit and handle masking of inputs above
+		char sendBuffer[sizeof(Vector3D) + 1]{ 0 }; // Schema: movement input, other keyboard like quitting or shooting
+		sendBuffer[0] = 'r'; // 'r' --> actor replication
+		memcpy(sendBuffer + 1, &movementDir, sizeof(Vector3D)); // Copying movement direction
+		sock.sendData(sendBuffer, sizeof(Vector3D) + 1, serverAddr);
+	}
 
+	// playerActor->setPosition(playerActor->getPosition() + (movementDir * playerSpeed * deltaTime));
+}
 
 
 int alternatingModelIndex = 0; // TEMP
@@ -315,6 +360,10 @@ void updateActors(char* buffer, int bufferLen)
 		else // Actor found. Updating Actor data
 		{
 			actor = actorMap[id];
+			if (actor->getPosition() != position)
+			{
+				printf("Client::main/reading_actors -- Receiving Replication\n");
+			}
 			actor->setPosition(position);
 			actor->setRotation(rotation);
 			//std::cout << actor->toString() << std::endl;
@@ -323,7 +372,7 @@ void updateActors(char* buffer, int bufferLen)
 
 		if (id == playerActorID && actor != playerActor)
 		{
-			printf("Client::updateActors -- Updating playerActor");
+			printf("Client::updateActors -- Updating playerActor\n");
 			playerActor = actor;
 		}
 		buffer += sizeof(Actor);
@@ -343,10 +392,14 @@ void handleServerMessage(char* buffer, unsigned int bufferLen)
 		}
 		case 'r':	// Replicating
 		{
+			//currTime = static_cast<float>(glfwGetTime());
+			//diff = currTime - lastTime;
+			//lastTime = currTime;
+			// printf("%f\n", diff);
+
 			/* Updates actor states to match server data.
 			*  Spawns actors that were sent to client, but don't yet exist
 			*/
-			// std::cout << "Replicating Actor Data\n";
 			updateActors(++buffer, --bufferLen);
 			break;
 		}
@@ -354,6 +407,14 @@ void handleServerMessage(char* buffer, unsigned int bufferLen)
 		{
 			memcpy(&playerActorID, ++buffer, sizeof(unsigned int));
 			std::cout << "Receiving playerActorID: " << playerActorID << std::endl;
+			break;
+		}
+		case 't':
+		{
+			std::cout << "client::handleServerMessage/t" << std::endl;
+			currTime = glfwGetTime();
+			diff = currTime - lastTime;
+			std::cout << diff << std::endl;
 			break;
 		}
 	}

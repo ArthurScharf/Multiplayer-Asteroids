@@ -36,6 +36,8 @@ public:
 	void operator+=(Vector3D& other) { x += other.x; y += other.y; z += other.z; };
 	void operator+=(Vector3D other) { x += other.x; y += other.y; z += other.z; };
 	void operator+=(float val) { x += val; y += val; z += val; };
+	bool operator==(Vector3D other) { return (x == other.x && y == other.y && z == other.z); }
+	bool operator!=(Vector3D other) { return (x != other.x && y != other.y && z != other.z); }
 };
 
 
