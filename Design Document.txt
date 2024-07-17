@@ -261,7 +261,29 @@ If client creates states too quickly, it will overwrite states yet to be compare
 QUESTION: Can I simply have the client only create a new state whenever it receives one from the server? 
     the newly created state in this way won't be the counterpart to the one we've just received, since the client is ahead,
     but it will mean we never over create states and lose older one's that are needed
+ANSWER: No because dropped packets will result in missing client states
 
 ---- Circular Buffer Design ----
 Encapsulation will keep the main code clean. Avoids bugs
 Simply a wrapper for an array of arrays of actors
+
+
+
+---- Interpolation ----
+Assuming fixed updates for both server and client, the client will need to display frames between the frames where it is using
+an update.
+!!!! KEY IDEA: Frames that are using updates and frames that aren't !!!!
+In these cases, the client must have at least two states to interpolate with.
+
+PROBLEM: The latest snapshot the client can be interpolating to is still behind the clients current state.
+SOLUTION: I'm thinking about interpolation wrong. We don't interpolate unless we need to rollback and replay through corrected
+          states
+
+We'll let the client simply move itself and work with the network to try to maintain synchronization between the client and
+server so rollbacks don't need to happen
+
+
+---- Synchronization ----
+Client updates server each frame. It's slower than the server so this shouldn't be an issue 
+PROBLEM: It might be. With 4 clients, the server might become overloaded. In fact, with 4 clients, it likely will.
+SOLUTION: Synchronized updates from both server and client is the solution same as it was for the server to client.
