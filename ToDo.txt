@@ -1,4 +1,9 @@
+[ ] Synchronized Updates for Client and Server
+	[ ] Pre-calculating the next server update between server updates
 
+
+
+NOTE: This feature is useful for rollback, but not the most important feature to be implementing
 [x] Implement a circular buffer on the client, for Client state, and received server state
 	[ ] Modify client's reading of packets and server's writing of packets to include the state sequence number
 	[ ] Make sure stateSequenceId's cannot exceed maximum number of states. implement circular system

@@ -404,7 +404,6 @@ void handleServerMessage(char* buffer, unsigned int bufferLen)
 
 void updateActors(char* buffer, int bufferLen)
 {
-
 	// TODO: Actor's must have a mesh instantiated when they're created. Data sent across must indicate the type of actor
 	//       Alternatively, we send spawn and destroy messages, which contain all the required actor data, including the type of actor
 	/* -- Schema --
@@ -416,8 +415,7 @@ void updateActors(char* buffer, int bufferLen)
 	*/
 
 
-
-	// Creating numActors & Checking for invalid bufferLen
+	// -- Creating numActors & Checking for invalid bufferLen -- //
 	unsigned int numActorsReceived = -1;
 	float check = bufferLen / (float)sizeof(Actor);
 	if (check - floor(check) == 0.f)
@@ -444,23 +442,17 @@ void updateActors(char* buffer, int bufferLen)
 		memcpy(&position, buffer + sizeof(unsigned int), sizeof(Vector3D));
 		memcpy(&rotation, buffer + sizeof(unsigned int) + sizeof(Vector3D), sizeof(Vector3D));
 
-
-		if (actorMap.count(id) == 0) // Actor not found
+		// -- Actor not found -- //
+		if (actorMap.count(id) == 0) 
 		{
-			// Add actor to map
+			// -- Add actor to map -- //
 			actor = new Actor(position, rotation, id);
-			//if ((alternatingModelIndex % 2) == 0)
-			//{
-			//	actor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx");// TEMP			
-			//}
-			//else
-			//{
-			//	actor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/chair/chair.fbx");// TEMP			
-			//}
 			actor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx");
 			actorMap[id] = actor;
+
+			// -- GameState -- //
 		}
-		else // Actor found. Updating Actor data
+		else // -- Actor found. Updating Actor data -- //
 		{
 			actor = actorMap[id];
 			if (actor->getPosition() != position)
@@ -468,7 +460,6 @@ void updateActors(char* buffer, int bufferLen)
 				printf("Client::main/reading_actors -- Receiving Replication\n");
 			}
 			actor->setPosition(position);
-			//std::cout << actor->getPosition().toString() << std::endl;
 			actor->setRotation(rotation);
 		}
 
