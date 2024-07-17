@@ -10,6 +10,7 @@
 
 
 
+#define MAX_ACTORS 64
 
 
 /*

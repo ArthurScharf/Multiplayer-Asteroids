@@ -1,0 +1,6 @@
+
+[x] Implement a circular buffer on the client, for Client state, and received server state
+	[ ] Modify client's reading of packets and server's writing of packets to include the state sequence number
+	[ ] Make sure stateSequenceId's cannot exceed maximum number of states. implement circular system
+	[ ] Using the rate of state creation, decide on a value for MAX_STATES
+

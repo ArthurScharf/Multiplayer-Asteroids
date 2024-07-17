@@ -9,6 +9,10 @@
 
 
 
+/*
+AAAA : modify to handle input bit and handle masking of inputs above
+
+*/
 
 
 
@@ -36,12 +40,20 @@
 #include "../CommonClasses/Vector3D.h"
 #include "../CommonClasses/Serialization/Serializer.h"
 
+
+
+
+#include "GameState.h"
+#include "CircularBuffer.h"
+
+
+
 #pragma comment(lib, "ws2_32.lib") // What is this doing?
 
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
-const unsigned int NUM_PACKETS_PER_CYCLE = 50;
+const unsigned int NUM_PACKETS_PER_CYCLE = 10;
 
 
 bool bWinsockLoaded = false;
@@ -79,7 +91,12 @@ unsigned int playerActorID = -1;
 // Pointer to actor being controlled by this client. Avoids repeated lookups using playerActorID
 Actor* playerActor = nullptr;
 
-const float playerSpeed = 25.f; // The rate at which the player changes position
+/* Stores the states created by the client at each fixed update.
+ * Used with incoming states from the server to compare for discrepencies
+ */
+CircularBuffer stateBuffer;
+
+const float playerSpeed = 70.f; // The rate at which the player changes position
 
 
 float deltaTime = 0.f;
@@ -113,6 +130,47 @@ bool bTesting = true;
 // ---- CLIENT ---- //
 int main()
 {
+	// -- Testing CircularBuffer & GameStates -- //
+	Actor* actors[MAX_ACTORS]{ nullptr };
+	Vector3D pos(0.f);
+	Vector3D rot(0.f);
+	for (int i = 0; i < 20; i++)
+	{
+		actors[i] = new Actor(pos, rot);
+	}
+	
+	CircularBuffer stateHistory;
+	for (int i = 0; i < MAX_STATES; i++)
+	{
+		stateHistory.append(new GameState(i, actors));
+	}
+	std::cout << stateHistory.toString() << std::endl;
+
+	GameState* ptr;
+	for (int i = 0; i < 5; i++)
+	{
+		ptr = new GameState(i + MAX_STATES, actors);
+		stateHistory.append(ptr);
+	}
+	std::cout << "\n" << stateHistory.toString() << std::endl;
+
+	for (int i = 0; i < 15; i++)
+	{
+		ptr = new GameState(i + MAX_STATES + 5, actors);
+		stateHistory.append(ptr);
+	}
+	std::cout << "\n" << stateHistory.toString() << std::endl;
+
+	// Prevents window from closing too quickly. Good so I can see print statements
+	char temp[200];
+	std::cin >> temp;
+	return 0;
+
+
+
+
+
+
 	// ---------- Networking ---------- //
 	sock.init(false);
 	/* Properly formatting received IP address string and placing it in sockaddr_in struct */
@@ -161,6 +219,8 @@ int main()
 	);
 
 
+	float tTime = 0.f;
+
 	// ---------- Main loop ---------- //
 	while (!glfwWindowShouldClose(window))
 	{
@@ -168,7 +228,9 @@ int main()
 		float currentFrame = static_cast<float>(glfwGetTime());
 		deltaTime = currentFrame - lastFrame;
 		lastFrame = currentFrame;
-		// std::cout << deltaTime << std::endl;
+		// std::cout << deltaTime << std::endl
+		tTime += deltaTime;
+		std::cout << tTime << std::endl;
 
 		processInput(window);
 
@@ -193,6 +255,9 @@ int main()
 			iter->second->Draw(shader);
 		}
 
+
+
+
 		// -- Sending Data to Server -- //
 		char sendBuffer[1 + (MAX_ACTORS * sizeof(Actor))]; // I doubt command data will ever exceed this size
 		// No player actor --> The server hasn't given us one yet; we're not connected
@@ -204,24 +269,35 @@ int main()
 
 
 		// -- Receiving Data from Server -- // Receives data from server regardless of state
-		int numBytesRead = 0;
-		sockaddr_in recvAddr; // This is never used
+		int recvBufferLen = 0;
+		int tempBufferLen = 0;
+		sockaddr_in recvAddr; // This is never used on purpose. Code smell
 		char* recvBuffer{};
 		char* tempBuffer{};
-		// TEST: Trying to catch client up to the server
 		for (int i = 0; i < NUM_PACKETS_PER_CYCLE; i++)
 		{
-			tempBuffer = sock.recvData(numBytesRead, recvAddr);
-			if (*tempBuffer != 'r') handleServerMessage(tempBuffer, numBytesRead);
-
-			if (numBytesRead == 0) break;
+			tempBuffer = sock.recvData(tempBufferLen, recvAddr);
+			if (tempBufferLen == 0)
+			{
+				printf("client::reading packets -- read all packets");
+				break;
+			}
+			if (*tempBuffer != 'r')
+			{
+				handleServerMessage(tempBuffer, tempBufferLen);
+				continue;
+			}
 			recvBuffer = tempBuffer;
+			recvBufferLen = tempBufferLen;
 		}
-		if (numBytesRead > 0)
+		if (recvBufferLen > 0)
 		{
-			handleServerMessage(recvBuffer, numBytesRead);
+			// printf("replicating\n");
+			handleServerMessage(recvBuffer, recvBufferLen);
 		}
 
+
+		
 		glfwPollEvents();
 		glfwSwapBuffers(window);
 	}
@@ -229,8 +305,8 @@ int main()
 	terminateProgram();
 
 	// Prevents window from closing too quickly. Good so I can see print statements
-	char temp[200];
-	std::cin >> temp;
+	//char temp[200];
+	//std::cin >> temp;
 
 	return 0;
 };
@@ -244,23 +320,11 @@ void processInput(GLFWwindow* window)
 		glfwSetWindowShouldClose(window, true);
 	if (playerActor == nullptr) return; 
 
-
-	
 	Vector3D movementDir;
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 	{
 		movementDir += Vector3D(0.f, 1.f, 0.f);
 		bSendInput = true;
-		// TEST 
-		if (bTesting)
-		{
-			lastTime = glfwGetTime();
-			bTesting = false;
-			std::cout << "Sending test" << std::endl;
-			char sendBuffer[] = { 't' };
-			sock.sendData(sendBuffer, 1, serverAddr);
-			return;
-		}
 	}
 	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
 	{
@@ -291,92 +355,14 @@ void processInput(GLFWwindow* window)
 
 	if (bSendInput)
 	{
-		// TODO: modify to handle input bit and handle masking of inputs above
+		// TODO: AAAA
 		char sendBuffer[sizeof(Vector3D) + 1]{ 0 }; // Schema: movement input, other keyboard like quitting or shooting
 		sendBuffer[0] = 'r'; // 'r' --> actor replication
 		memcpy(sendBuffer + 1, &movementDir, sizeof(Vector3D)); // Copying movement direction
 		sock.sendData(sendBuffer, sizeof(Vector3D) + 1, serverAddr);
 	}
 
-	// playerActor->setPosition(playerActor->getPosition() + (movementDir * playerSpeed * deltaTime));
-}
-
-
-int alternatingModelIndex = 0; // TEMP
-void updateActors(char* buffer, int bufferLen)
-{
-
-	// TODO: Actor's must have a mesh instantiated when they're created. Data sent across must indicate the type of actor
-	//       Alternatively, we send spawn and destroy messages, which contain all the required actor data, including the type of actor
-
-
-	/* -- Schema -- 
-	*  0  - 3  : id
-	*  4  - 16 : location
-	*  15 - 27 : rotation
-	*/
-
-	// Creating numActors & Checking for invalid bufferLen
-	unsigned int numActorsReceived = -1;
-	float check = bufferLen / (float)sizeof(Actor);
-	if (check - floor(check) == 0.f)
-		numActorsReceived = (int)floor(check);
-	if (numActorsReceived == -1)
-	{
-		std::cout << "Client::updateActors -- length of buffer not wholly divisible by sizeof(Actor)\n";
-		return;
-	}
-	
-	//std::cout << numActorsReceived << std::endl;
-
-	// -- Reading Actors -- //
-	Actor* actor;
-	for (unsigned int i = 0; i < numActorsReceived; i++)
-	{
-		unsigned int id;
-		Vector3D position;
-		Vector3D rotation;
-		memcpy(&id, buffer, sizeof(unsigned int));
-		memcpy(&position, buffer + sizeof(unsigned int), sizeof(Vector3D));
-		memcpy(&rotation, buffer + sizeof(unsigned int) + sizeof(Vector3D), sizeof(Vector3D));
-
-		if (actorMap.count(id) == 0) // Actor not found
-		{
-			// Add actor to map
-			actor = new Actor(position, rotation, id);
-			//if ((alternatingModelIndex % 2) == 0)
-			//{
-			//	actor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx");// TEMP			
-			//}
-			//else
-			//{
-			//	actor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/chair/chair.fbx");// TEMP			
-			//}
-			actor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx");// TEMP			
-			alternatingModelIndex++;
-			actorMap[id] = actor;
-
-		}
-		else // Actor found. Updating Actor data
-		{
-			actor = actorMap[id];
-			if (actor->getPosition() != position)
-			{
-				printf("Client::main/reading_actors -- Receiving Replication\n");
-			}
-			actor->setPosition(position);
-			actor->setRotation(rotation);
-			//std::cout << actor->toString() << std::endl;
-		}
-
-
-		if (id == playerActorID && actor != playerActor)
-		{
-			printf("Client::updateActors -- Updating playerActor\n");
-			playerActor = actor;
-		}
-		buffer += sizeof(Actor);
-	}
+	// playerActor->setPosition(playerActor->getPosition() + (movementDir * 70.f * deltaTime));
 }
 
 
@@ -392,11 +378,6 @@ void handleServerMessage(char* buffer, unsigned int bufferLen)
 		}
 		case 'r':	// Replicating
 		{
-			//currTime = static_cast<float>(glfwGetTime());
-			//diff = currTime - lastTime;
-			//lastTime = currTime;
-			// printf("%f\n", diff);
-
 			/* Updates actor states to match server data.
 			*  Spawns actors that were sent to client, but don't yet exist
 			*/
@@ -412,11 +393,91 @@ void handleServerMessage(char* buffer, unsigned int bufferLen)
 		case 't':
 		{
 			std::cout << "client::handleServerMessage/t" << std::endl;
-			currTime = glfwGetTime();
-			diff = currTime - lastTime;
-			std::cout << diff << std::endl;
+			//currTime = glfwGetTime();
+			//diff = currTime - lastTime;
+			//std::cout << diff << std::endl;
 			break;
 		}
+	}
+}
+
+
+void updateActors(char* buffer, int bufferLen)
+{
+
+	// TODO: Actor's must have a mesh instantiated when they're created. Data sent across must indicate the type of actor
+	//       Alternatively, we send spawn and destroy messages, which contain all the required actor data, including the type of actor
+	/* -- Schema --
+	*  0  - 3  : stateSequenceId
+	*  (N + ...)
+	*  0  - 3  : id
+	*  4  - 16 : location
+	*  15 - 27 : rotation
+	*/
+
+
+
+	// Creating numActors & Checking for invalid bufferLen
+	unsigned int numActorsReceived = -1;
+	float check = bufferLen / (float)sizeof(Actor);
+	if (check - floor(check) == 0.f)
+		numActorsReceived = (int)floor(check);
+	if (numActorsReceived == -1)
+	{
+		std::cout << "Client::updateActors -- length of buffer not wholly divisible by sizeof(Actor)\n";
+		return;
+	}
+
+	// -- Creating and Copying to stateSequenceId -- //
+	unsigned int stateSequenceId = -1;
+	memcpy(&stateSequenceId, buffer, sizeof(unsigned int));
+	buffer += sizeof(unsigned int);
+
+	// -- Reading Actors -- //
+	Actor* actor;
+	for (unsigned int i = 0; i < numActorsReceived; i++)
+	{
+		unsigned int id;
+		Vector3D position;
+		Vector3D rotation;
+		memcpy(&id, buffer, sizeof(unsigned int));
+		memcpy(&position, buffer + sizeof(unsigned int), sizeof(Vector3D));
+		memcpy(&rotation, buffer + sizeof(unsigned int) + sizeof(Vector3D), sizeof(Vector3D));
+
+
+		if (actorMap.count(id) == 0) // Actor not found
+		{
+			// Add actor to map
+			actor = new Actor(position, rotation, id);
+			//if ((alternatingModelIndex % 2) == 0)
+			//{
+			//	actor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx");// TEMP			
+			//}
+			//else
+			//{
+			//	actor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/chair/chair.fbx");// TEMP			
+			//}
+			actor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx");
+			actorMap[id] = actor;
+		}
+		else // Actor found. Updating Actor data
+		{
+			actor = actorMap[id];
+			if (actor->getPosition() != position)
+			{
+				printf("Client::main/reading_actors -- Receiving Replication\n");
+			}
+			actor->setPosition(position);
+			//std::cout << actor->getPosition().toString() << std::endl;
+			actor->setRotation(rotation);
+		}
+
+		if (id == playerActorID && actor != playerActor)
+		{
+			printf("Client::updateActors -- Updating playerActor\n");
+			playerActor = actor;
+		}
+		buffer += sizeof(Actor);
 	}
 }
 

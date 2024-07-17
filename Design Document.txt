@@ -7,6 +7,9 @@ the server to both send and receive data simultaneously. Note that we should avo
 
 
 
+----- BUG -----
+
+
 
 
 
@@ -206,3 +209,59 @@ PROBLEM: some of the packets stored in the buffer are not state updates and thus
 SOLUTION: Each frame with the client, have said client read ALL the packets in the buffer and store them based on their message type.
           For packets that store game state update data, simply choose the discard all the messages that aren't the most recently 
           received packet
+
+
+PROBLEM: The client is still consuming server-snapshots more slowly than the server. Further, the delta time calculation necessary 
+	 for the client will differ from the server
+
+QUESTION: Will a different delta time matter for the client and server if the client is copying snapshots?
+ANSWER: Not conceptually. Those snapshots have the server's delta time encoded into it. The issue is is then getting the client
+        to copy state at the same rate that the server sends it.
+	
+NOTE: In essence, the delta time DOES matter, but not for calculations. It matters that the client consumes snapshots at the same rate
+      that the server sends them because those snapshots will have delta time encoded into the changes in position.
+
+QUESTION: Does client delta time matter for interpolation?
+          So long as server and client delta times are calculated relative to the same time interval (a second), delta time's can differ
+          for the purpose of interpolation
+
+
+
+
+PROBLEM: No matter the rate of updates sent to/from server, the differing delta time is an issue.
+         Even if the server is consuming updates 1:1 with the client sending them, differing delta times will result
+         in differing distances traveled relative to the speed if the client was moving its own actor.
+SOLUTION: The solution seems to be to update the simulation using a constant net update. In other words, all values are updated
+          relative to the number of updates, NOT the speed of the program. The speed of the program only matters as a means to read
+          game states
+PROBLEM: Is this totally true? the client will need to interpolate between packets to allow for smoother movement. Doing this will
+         require a delta time to handle varying frame rate. In this case, we need to understand how to properly interpolate 
+         between game states
+
+
+---- Interpolating Between Game States ----
+Synchronized net updates (client and server use the same deck of cards, even though the client gets its cards late)
+
+"Synchronize The Simulation". Everyone deals with quantized game states. Yes, each gamestate represents a constant difference in time.
+Game states like a deck of cards. Problems are now related to dealing with the rate of consumption of cards
+
+The client receives a snapshot in T time. T = server_update_rate + RTT/2
+
+
+Must save each state update from the server in a circular buffer.
+Client is ahead of server. ie the clients world state is chronologically ahead of the server
+--> State replies from server will always be for a previous state in time.
+We must be able to compare the just received state to the previously predicted client side state.
+--> The client must also store it's own circular buffer of states
+There must be a way to match the paired states, one of client, one from server.
+--> States must sequential update numbers 
+If client creates states too quickly, it will overwrite states yet to be compared to their server counterpart.
+--> Server & Client must generate and consume states at almost the same rate
+
+QUESTION: Can I simply have the client only create a new state whenever it receives one from the server? 
+    the newly created state in this way won't be the counterpart to the one we've just received, since the client is ahead,
+    but it will mean we never over create states and lose older one's that are needed
+
+---- Circular Buffer Design ----
+Encapsulation will keep the main code clean. Avoids bugs
+Simply a wrapper for an array of arrays of actors

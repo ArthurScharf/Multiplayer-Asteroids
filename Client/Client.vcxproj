@@ -145,6 +145,8 @@
   <ItemGroup>
     <ClInclude Include="..\CommonClasses\Mesh.h" />
     <ClInclude Include="Camera.h" />
+    <ClInclude Include="CircularBuffer.h" />
+    <ClInclude Include="GameState.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

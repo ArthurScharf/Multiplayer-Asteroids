@@ -37,8 +37,10 @@ public:
 	}
 };
 
-
+float period_Update = 1.f / 20.f; // Verbose to allow easy editing. Should be properly declared later
 float deltaTime = 0.f;
+
+unsigned int nextStateSequenceId = 0;
 
 
 #define MAX_CLIENTS 4
@@ -75,21 +77,41 @@ int main()
 	std::chrono::steady_clock::time_point start = std::chrono::high_resolution_clock::now();
 	std::chrono::steady_clock::time_point end;
 
-	char sendBuffer[1 + (MAX_ACTORS * sizeof(Actor))]{};
+	/*
+	* 1 byte : message type char
+	* sizeof(unsigned int) bytes : room for stateSequenceId
+	* remaining bytes. Actor replication
+	* 
+	* I doubt any other kind of message will exceed the size of this type of message
+	*/
+	char sendBuffer[1 + sizeof(unsigned int) + (MAX_ACTORS * sizeof(Actor))]{};
 	sockaddr_in clientAddr;
 	clientAddr.sin_family = AF_INET;
 	clientAddr.sin_port = htons(4242);
 	int clientAddr_len = sizeof(clientAddr);
 
+	
+	float totalTime = 0.f;
 
+
+	float elapsedTimeSinceUpdate = 0.f;
 	while (true)
 	{
+
 		// -- Delta Time -- //	
 		end = start;
 		start = std::chrono::high_resolution_clock::now();
 		deltaTime = (start - end).count() / 1000000000.f;	// nanoseconds to seconds
-		// std::cout << deltaTime << std::endl;
-		
+
+		if (numClients > 0)
+		{
+			totalTime += deltaTime;
+			std::cout << totalTime << std::endl;
+			if (totalTime > 3)
+			{
+				 std::cout << "block" << std::endl;
+			}
+		}
 
 		// BUG: There are two actors being created when we create an actor here
 		// -- Checking for spawn/respawn of player characters -- //
@@ -103,6 +125,7 @@ int main()
 				Vector3D position(0.f);
 				Vector3D rotation(0.f);
 				iter->second = createActor(position, rotation);
+				printf("Creating Actor\n");
 				// QUESTION: Why would creating an actor in this way result in a nullptr error when trying to replicate
 				//iter->second = new Actor(position, rotation);
 				//numActors++;
@@ -131,19 +154,19 @@ int main()
 		{
 			switch (recvBuffer[0]) // Instruction Received
 			{
-					// connect. Client wants to be added to list of connected clients
+				// connect. Client wants to be added to list of connected clients
 				case 'c':
 				{
 					std::cout << "client connected\n"; // TODO: print client IP address
-					// Storing client ip address
+					// - Storing client ip address - //
 					ipAddress ip;
 					ip._in_addr = clientAddr.sin_addr;
 					clients.insert({ ip, nullptr });
 					numClients++;
-					// replying to message
 
+					// - replying to message - //
 					sendBuffer[0] = 'c';
-					sock.sendData(sendBuffer, 1, clientAddr);
+					sock.sendData(sendBuffer, 2, clientAddr);
 					break;
 				}
 				case 'r':
@@ -166,8 +189,10 @@ int main()
 					}
 					Vector3D movementDir;
 					memcpy(&movementDir, recvBuffer + 1, sizeof(Vector3D));
+					// std::cout << (movementDir * 70.f * deltaTime).toString() << std::endl;
 					Actor* actor = clients[ipAddr];
-					actor->setPosition(actor->getPosition() + (700.f * movementDir * deltaTime));
+					actor->setPosition(actor->getPosition() + (70.f * movementDir * deltaTime));
+					std::cout << actor->getId() << "/" << actor->getPosition().toString() << std::endl;
 					break;
 				}
 				case 't': // Case used for testing. Should not be in the finals build
@@ -184,27 +209,40 @@ int main()
 			}
 		}
 
-		// -- Actor replication -- //
-		// - Packing actor data
-		sendBuffer[0] = 'r'; // 'r' --> actor replication message
-		char* tempBuffer = sendBuffer;
-		tempBuffer++;
-		for (unsigned int i = 0; i < numActors; i++)
-		{
-			memcpy(tempBuffer, actors[i], sizeof(Actor));
-			tempBuffer += sizeof(Actor);
-		}
-		unsigned int bufferLen = 1 + (numActors * sizeof(Actor));
 
-		if (numClients <= 0) continue;
-		
-		for (auto it = clients.begin(); it != clients.end(); ++it)
+
+		// -- Sending Data: Actor Replication -- //
+		if (elapsedTimeSinceUpdate >= 0.05f) // ~20 times a second       
 		{
-			clientAddr.sin_addr = it->first._in_addr;
-			sock.sendData(sendBuffer, bufferLen, clientAddr);
-		}
-		
-	};
+			elapsedTimeSinceUpdate -= 0.05f;
+
+			if (numClients <= 0) continue;
+
+			
+
+			// printf("fixed update\n");
+
+			// - Packing actor data - //
+			sendBuffer[0] = 'r'; // 'r' --> actor replication message
+			memcpy(sendBuffer + 1, (void*)nextStateSequenceId++, sizeof(unsigned int));
+			char* tempBuffer = sendBuffer + 2;
+			for (unsigned int i = 0; i < numActors; i++)
+			{
+				memcpy(tempBuffer, actors[i], sizeof(Actor));
+				tempBuffer += sizeof(Actor);
+			}
+			// - Sending Actor data - //
+			unsigned int bufferLen = 1 + (numActors * sizeof(Actor));
+			for (auto it = clients.begin(); it != clients.end(); ++it)
+			{
+				//printf("Sending Snapshot\n");
+				clientAddr.sin_addr = it->first._in_addr;
+				sock.sendData(sendBuffer, bufferLen, clientAddr);
+			}
+		}//~ Fixed Update
+
+		elapsedTimeSinceUpdate += deltaTime; // Should be with delta time calculation for accuracy
+	};//~ Main Loop
 
 	WSACleanup();
 

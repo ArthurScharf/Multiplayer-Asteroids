@@ -25,7 +25,7 @@ public:
 	std::string toString()
 	{
 		char buffer[50]{};
-		sprintf_s(buffer, 50, "%4.2f %4.2f %4.2f", x, y, z);
+		sprintf_s(buffer, 50, "%4.6f %4.6f %4.6f", x, y, z);
 		return std::string(buffer);
 	}
 
