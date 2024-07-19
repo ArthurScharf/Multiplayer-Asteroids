@@ -66,7 +66,7 @@ Camera camera( glm::vec3(0.f, 0.f, 100.f) ); // Camera Position
 
 UDPSocket sock;
 sockaddr_in serverAddr;
-bool bConnectedToServer = false;
+bool bIsConnectedToServer = false;
 
 
 /* There is a playerActorID and a playerActor pointer for the following reasons
@@ -99,8 +99,12 @@ CircularBuffer stateBuffer;
 const float playerSpeed = 70.f; // The rate at which the player changes position
 
 
+// -- Time -- //
 float deltaTime = 0.f;
 float lastFrame = 0.f;
+float updatePeriod = 1.f / 4.f; // Verbose to allow easy editing. Should be properly declared later // 20.f; 
+float elapsedTimeSinceUpdate = 0.f;
+unsigned int stateSequenceId = 0;
 
 
 const std::string gearFBX_path = "C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx";
@@ -130,45 +134,6 @@ bool bTesting = true;
 // ---- CLIENT ---- //
 int main()
 {
-	// -- Testing CircularBuffer & GameStates -- //
-	Actor* actors[MAX_ACTORS]{ nullptr };
-	Vector3D pos(0.f);
-	Vector3D rot(0.f);
-	for (int i = 0; i < 20; i++)
-	{
-		actors[i] = new Actor(pos, rot);
-	}
-	
-	CircularBuffer stateHistory;
-	for (int i = 0; i < MAX_STATES; i++)
-	{
-		stateHistory.append(new GameState(i, actors));
-	}
-	std::cout << stateHistory.toString() << std::endl;
-
-	GameState* ptr;
-	for (int i = 0; i < 5; i++)
-	{
-		ptr = new GameState(i + MAX_STATES, actors);
-		stateHistory.append(ptr);
-	}
-	std::cout << "\n" << stateHistory.toString() << std::endl;
-
-	for (int i = 0; i < 15; i++)
-	{
-		ptr = new GameState(i + MAX_STATES + 5, actors);
-		stateHistory.append(ptr);
-	}
-	std::cout << "\n" << stateHistory.toString() << std::endl;
-
-	// Prevents window from closing too quickly. Good so I can see print statements
-	char temp[200];
-	std::cin >> temp;
-	return 0;
-
-
-
-
 
 
 	// ---------- Networking ---------- //
@@ -219,8 +184,6 @@ int main()
 	);
 
 
-	float tTime = 0.f;
-
 	// ---------- Main loop ---------- //
 	while (!glfwWindowShouldClose(window))
 	{
@@ -228,9 +191,8 @@ int main()
 		float currentFrame = static_cast<float>(glfwGetTime());
 		deltaTime = currentFrame - lastFrame;
 		lastFrame = currentFrame;
-		// std::cout << deltaTime << std::endl
-		tTime += deltaTime;
-		std::cout << tTime << std::endl;
+		elapsedTimeSinceUpdate += deltaTime;
+
 
 		processInput(window);
 
@@ -256,18 +218,7 @@ int main()
 		}
 
 
-
-
-		// -- Sending Data to Server -- //
-		char sendBuffer[1 + (MAX_ACTORS * sizeof(Actor))]; // I doubt command data will ever exceed this size
-		// No player actor --> The server hasn't given us one yet; we're not connected
-		if (!bConnectedToServer)
-		{
-			sendBuffer[0] = 'c'; // Connect
-			sock.sendData(sendBuffer, 1, serverAddr);
-		}
-
-
+	
 		// -- Receiving Data from Server -- // Receives data from server regardless of state
 		int recvBufferLen = 0;
 		int tempBufferLen = 0;
@@ -297,16 +248,26 @@ int main()
 		}
 
 
-		
+		// TODO: more elegent solution required
+		// -- Should attempt Connect? -- //
+		char sendBuffer[1 + (MAX_ACTORS * sizeof(Actor))]; // I doubt command data will ever exceed this size
+		// No player actor --> The server hasn't given us one yet; we're not connected
+		if (!bIsConnectedToServer)
+		{
+			sendBuffer[0] = 'c'; // Connect
+			sock.sendData(sendBuffer, 1, serverAddr);
+		}
+
+
 		glfwPollEvents();
 		glfwSwapBuffers(window);
-	}
+	}//~ Main Loop
 
 	terminateProgram();
 
 	// Prevents window from closing too quickly. Good so I can see print statements
-	//char temp[200];
-	//std::cin >> temp;
+	char temp[200];
+	std::cin >> temp;
 
 	return 0;
 };
@@ -353,7 +314,19 @@ void processInput(GLFWwindow* window)
 	}
 	movementDir.Normalize();
 
-	if (bSendInput)
+
+	// ---- Fixed Update ---- //
+	if (bIsConnectedToServer && elapsedTimeSinceUpdate >= updatePeriod)
+	{
+		elapsedTimeSinceUpdate -= updatePeriod;
+
+		stateSequenceId++;
+		std::cout << stateSequenceId << std::endl;
+
+
+	}//~ fixed Update
+
+	if (bSendInput && bIsConnectedToServer && elapsedTimeSinceUpdate >= updatePeriod)
 	{
 		// TODO: AAAA
 		char sendBuffer[sizeof(Vector3D) + 1]{ 0 }; // Schema: movement input, other keyboard like quitting or shooting
@@ -373,7 +346,10 @@ void handleServerMessage(char* buffer, unsigned int bufferLen)
 		case 'c':	// Connection Reply
 		{
 			std::cout << "Successfully connected\n";
-			bConnectedToServer = true;
+			bIsConnectedToServer = true;
+			stateSequenceId = *(unsigned int*)(buffer + 1);
+			std::cout << "Received Simulation Step: " << stateSequenceId << std::endl;
+			stateSequenceId += 5; // TODO: Hardcoded solution to getting the client ahead. Should later be replaced with a more elegent solution
 			break;
 		}
 		case 'r':	// Replicating

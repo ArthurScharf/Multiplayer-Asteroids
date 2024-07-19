@@ -37,10 +37,10 @@ public:
 	}
 };
 
-float period_Update = 1.f / 20.f; // Verbose to allow easy editing. Should be properly declared later
+float updatePeriod = 1.f / 4.f; // Verbose to allow easy editing. Should be properly declared later // 20.f; 
 float deltaTime = 0.f;
 
-unsigned int nextStateSequenceId = 0;
+unsigned int stateSequenceId = 0;
 
 
 #define MAX_CLIENTS 4
@@ -90,28 +90,18 @@ int main()
 	clientAddr.sin_port = htons(4242);
 	int clientAddr_len = sizeof(clientAddr);
 
-	
-	float totalTime = 0.f;
-
 
 	float elapsedTimeSinceUpdate = 0.f;
 	while (true)
 	{
 
-		// -- Delta Time -- //	
+		// -- Time Management -- //	
 		end = start;
 		start = std::chrono::high_resolution_clock::now();
 		deltaTime = (start - end).count() / 1000000000.f;	// nanoseconds to seconds
+		elapsedTimeSinceUpdate += deltaTime;
 
-		if (numClients > 0)
-		{
-			totalTime += deltaTime;
-			std::cout << totalTime << std::endl;
-			if (totalTime > 3)
-			{
-				 std::cout << "block" << std::endl;
-			}
-		}
+
 
 		// BUG: There are two actors being created when we create an actor here
 		// -- Checking for spawn/respawn of player characters -- //
@@ -165,8 +155,12 @@ int main()
 					numClients++;
 
 					// - replying to message - //
+					/*
+					* data is message type & state of simulation so client can try to get ahead
+					*/
 					sendBuffer[0] = 'c';
-					sock.sendData(sendBuffer, 2, clientAddr);
+					memcpy(sendBuffer + 1, &stateSequenceId, sizeof(unsigned int));
+					sock.sendData(sendBuffer, 1 + sizeof(unsigned int), clientAddr);
 					break;
 				}
 				case 'r':
@@ -212,20 +206,19 @@ int main()
 
 
 		// -- Sending Data: Actor Replication -- //
-		if (elapsedTimeSinceUpdate >= 0.05f) // ~20 times a second       
+		if (elapsedTimeSinceUpdate >= updatePeriod) // ~20 times a second       
 		{
-			elapsedTimeSinceUpdate -= 0.05f;
+			elapsedTimeSinceUpdate -= updatePeriod;
+			stateSequenceId++;
+			std::cout << "Fixed Update: " << stateSequenceId << std::endl;
 
 			if (numClients <= 0) continue;
-
-			
-
-			// printf("fixed update\n");
-
+	
 			// - Packing actor data - //
 			sendBuffer[0] = 'r'; // 'r' --> actor replication message
-			memcpy(sendBuffer + 1, (void*)nextStateSequenceId++, sizeof(unsigned int));
-			char* tempBuffer = sendBuffer + 2;
+			char* tempBuffer = sendBuffer;
+			tempBuffer += 2;
+			// memcpy(sendBuffer + 1, (void*)stateSequenceId++, sizeof(unsigned int));
 			for (unsigned int i = 0; i < numActors; i++)
 			{
 				memcpy(tempBuffer, actors[i], sizeof(Actor));
@@ -241,7 +234,6 @@ int main()
 			}
 		}//~ Fixed Update
 
-		elapsedTimeSinceUpdate += deltaTime; // Should be with delta time calculation for accuracy
 	};//~ Main Loop
 
 	WSACleanup();
