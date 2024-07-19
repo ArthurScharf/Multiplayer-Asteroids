@@ -84,19 +84,24 @@ bool bIsConnectedToServer = false;
 * NOTE: This feels convoluted. I should think about reworking this
 */
 
+
+// ---- Player Character ---- //
 // A Map is used so we don't need to create an actor each time we parse actor data to see if that actor exists. We can just see if it's id has been placed in this map
 std::map<unsigned int, Actor*> actorMap;
 // Stores network ID for actor this client is controlling. Necessary bc a client can be connected without an actor
 unsigned int playerActorID = -1;
 // Pointer to actor being controlled by this client. Avoids repeated lookups using playerActorID
 Actor* playerActor = nullptr;
+Vector3D movementDir;
+const float playerSpeed = 70.f; // The rate at which the player changes position
+
+
 
 /* Stores the states created by the client at each fixed update.
  * Used with incoming states from the server to compare for discrepencies
  */
 CircularBuffer stateBuffer;
 
-const float playerSpeed = 70.f; // The rate at which the player changes position
 
 
 // -- Time -- //
@@ -118,11 +123,6 @@ void handleServerMessage(char* buffer, unsigned int bufferLen);
 
 
 
-// TESTING
-float diff = 0.f;
-float currTime;
-float lastTime;
-bool bTesting = true;
 
 
 
@@ -134,18 +134,46 @@ bool bTesting = true;
 // ---- CLIENT ---- //
 int main()
 {
-
-
 	// ---------- Networking ---------- //
+	char sendBuffer[1 + (MAX_ACTORS * sizeof(Actor))];
+	char* recvBuffer{};
+	int numBytesRead = -1; // TODO: This might be a duplicate of another variable
+
+	// ---- Establishing Connection ---- //
 	sock.init(false);
 	/* Properly formatting received IP address string and placing it in sockaddr_in struct */
 	serverAddr.sin_family = AF_INET;
-	std::cout << "Enter server IP address: ";
-	wchar_t wServerAddrStr[INET_ADDRSTRLEN];
-	std::wcin >> wServerAddrStr;
-	PCWSTR str(wServerAddrStr);
-	InetPtonW(AF_INET, str, &(serverAddr.sin_addr));
-	serverAddr.sin_port = htons(6969);
+
+	while (!bIsConnectedToServer)
+	{
+		std::cout << "Enter server IP address: ";
+		wchar_t wServerAddrStr[INET_ADDRSTRLEN];
+		std::wcin >> wServerAddrStr;
+		PCWSTR str(wServerAddrStr);
+		InetPtonW(AF_INET, str, &(serverAddr.sin_addr));
+		serverAddr.sin_port = htons(6969);
+		// -- Sending Connection Message -- //
+		// Attempt to connect several times
+		for (int i = 0; i < 4; i++)
+		{
+			sendBuffer[0] = 'c'; // Connect
+			sock.sendData(sendBuffer, 1, serverAddr);
+
+			Sleep(250); // quarter second seems reasonable
+
+			sockaddr_in _; // TODO: Code smell
+			recvBuffer = sock.recvData(numBytesRead, _);
+			if (numBytesRead > 0 && *recvBuffer == 'c')
+			{
+				bIsConnectedToServer = true;
+				stateSequenceId = *(unsigned int*)(recvBuffer + 1);
+				stateSequenceId += 5; // TODO: Arbitrary guess to get the client ahead. More elegent solution in the future
+				break;
+			}
+		}
+	}
+
+
 
 
 	// ---------- OpenGL ---------- //
@@ -164,19 +192,16 @@ int main()
 	}
 	glfwMakeContextCurrent(window); // Why are we doing this again?
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-
 	// Checking to see if GLAD loaded
 	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
 	{
 		std::cout << "Failed to initialize GLAD" << std::endl;
 		terminateProgram();
 	}
-
 	// OpenGL Settings
 	glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LESS); // Explicitly stating the depth function to be used
-
 	// Compiling GLSL Shaders 
 	Shader shader(
 		"C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/GLSL Shaders/Vertex.txt",
@@ -187,13 +212,15 @@ int main()
 	// ---------- Main loop ---------- //
 	while (!glfwWindowShouldClose(window))
 	{
-		// Per-frame logic
+
+		// -- Per-frame logic -- //
 		float currentFrame = static_cast<float>(glfwGetTime());
 		deltaTime = currentFrame - lastFrame;
 		lastFrame = currentFrame;
 		elapsedTimeSinceUpdate += deltaTime;
 
-
+		// -- Input Handling -- //
+		movementDir.x = movementDir.y = movementDir.z = 0.f; // Reset for this frame
 		processInput(window);
 
 		// -- Rendering Actors -- //
@@ -218,13 +245,27 @@ int main()
 		}
 
 
-	
+		// ---- Fixed Update ---- //
+		if (elapsedTimeSinceUpdate >= updatePeriod)
+		{
+			elapsedTimeSinceUpdate -= updatePeriod;
+			stateSequenceId++;
+
+			std::cout << stateSequenceId << std::endl;
+
+			// TODO: AAAA
+			char sendBuffer[sizeof(Vector3D) + 1]{ 0 }; // Schema: movement input, other keyboard like quitting or shooting
+			sendBuffer[0] = 'r'; // 'r' --> actor replication
+			memcpy(sendBuffer + 1, &movementDir, sizeof(Vector3D)); // Copying movement direction
+			sock.sendData(sendBuffer, sizeof(Vector3D) + 1, serverAddr);
+		}
+
+
 		// -- Receiving Data from Server -- // Receives data from server regardless of state
+		char* tempBuffer{};
 		int recvBufferLen = 0;
 		int tempBufferLen = 0;
 		sockaddr_in recvAddr; // This is never used on purpose. Code smell
-		char* recvBuffer{};
-		char* tempBuffer{};
 		for (int i = 0; i < NUM_PACKETS_PER_CYCLE; i++)
 		{
 			tempBuffer = sock.recvData(tempBufferLen, recvAddr);
@@ -243,19 +284,7 @@ int main()
 		}
 		if (recvBufferLen > 0)
 		{
-			// printf("replicating\n");
 			handleServerMessage(recvBuffer, recvBufferLen);
-		}
-
-
-		// TODO: more elegent solution required
-		// -- Should attempt Connect? -- //
-		char sendBuffer[1 + (MAX_ACTORS * sizeof(Actor))]; // I doubt command data will ever exceed this size
-		// No player actor --> The server hasn't given us one yet; we're not connected
-		if (!bIsConnectedToServer)
-		{
-			sendBuffer[0] = 'c'; // Connect
-			sock.sendData(sendBuffer, 1, serverAddr);
 		}
 
 
@@ -275,66 +304,38 @@ int main()
 
 void processInput(GLFWwindow* window)
 {
-	bool bSendInput = false;
-
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, true);
 	if (playerActor == nullptr) return; 
 
-	Vector3D movementDir;
+
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 	{
 		movementDir += Vector3D(0.f, 1.f, 0.f);
-		bSendInput = true;
 	}
 	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
 	{
 		movementDir += Vector3D(0.f, -1.f, 0.f);
-		bSendInput = true;
 	}
 	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
 	{
 		movementDir += Vector3D(1.f, 0.f, 0.f);
-		bSendInput = true;
 	}
 	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
 	{
 		movementDir += Vector3D(-1.f, 0.f, 0.f);
-		bSendInput = true;
 	}
 	if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
 	{
 		movementDir += Vector3D(0.f, 0.f, -1.f);
-		bSendInput = true;
 	}
 	if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
 	{
 		movementDir += Vector3D(0.f, 0.f, 1.f);
-		bSendInput = true;
 	}
 	movementDir.Normalize();
-
-
-	// ---- Fixed Update ---- //
-	if (bIsConnectedToServer && elapsedTimeSinceUpdate >= updatePeriod)
-	{
-		elapsedTimeSinceUpdate -= updatePeriod;
-
-		stateSequenceId++;
-		std::cout << stateSequenceId << std::endl;
-
-
-	}//~ fixed Update
-
-	if (bSendInput && bIsConnectedToServer && elapsedTimeSinceUpdate >= updatePeriod)
-	{
-		// TODO: AAAA
-		char sendBuffer[sizeof(Vector3D) + 1]{ 0 }; // Schema: movement input, other keyboard like quitting or shooting
-		sendBuffer[0] = 'r'; // 'r' --> actor replication
-		memcpy(sendBuffer + 1, &movementDir, sizeof(Vector3D)); // Copying movement direction
-		sock.sendData(sendBuffer, sizeof(Vector3D) + 1, serverAddr);
-	}
-
+	
+	// TODO: Allow client side simulation
 	// playerActor->setPosition(playerActor->getPosition() + (movementDir * 70.f * deltaTime));
 }
 

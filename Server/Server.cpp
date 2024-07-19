@@ -186,7 +186,7 @@ int main()
 					// std::cout << (movementDir * 70.f * deltaTime).toString() << std::endl;
 					Actor* actor = clients[ipAddr];
 					actor->setPosition(actor->getPosition() + (70.f * movementDir * deltaTime));
-					std::cout << actor->getId() << "/" << actor->getPosition().toString() << std::endl;
+					// std::cout << actor->getId() << "/" << actor->getPosition().toString() << std::endl;
 					break;
 				}
 				case 't': // Case used for testing. Should not be in the finals build
