@@ -107,7 +107,7 @@ CircularBuffer stateBuffer;
 // -- Time -- //
 float deltaTime = 0.f;
 float lastFrame = 0.f;
-float updatePeriod = 1.f / 4.f; // Verbose to allow easy editing. Should be properly declared later // 20.f; 
+float updatePeriod = 1.f / 20.f; // Verbose to allow easy editing. Should be properly declared later 
 float elapsedTimeSinceUpdate = 0.f;
 unsigned int stateSequenceId = 0;
 
@@ -251,7 +251,8 @@ int main()
 			elapsedTimeSinceUpdate -= updatePeriod;
 			stateSequenceId++;
 
-			std::cout << stateSequenceId << std::endl;
+			// std::cout << stateSequenceId << std::endl;
+			// std::cout << movementDir.toString() << std::endl;
 
 			// TODO: AAAA
 			char sendBuffer[sizeof(Vector3D) + 1]{ 0 }; // Schema: movement input, other keyboard like quitting or shooting
@@ -284,6 +285,7 @@ int main()
 		}
 		if (recvBufferLen > 0)
 		{
+			// std::cout << "Receiving Update" << std::endl;
 			handleServerMessage(recvBuffer, recvBufferLen);
 		}
 
@@ -394,7 +396,7 @@ void updateActors(char* buffer, int bufferLen)
 
 	// -- Creating numActors & Checking for invalid bufferLen -- //
 	unsigned int numActorsReceived = -1;
-	float check = bufferLen / (float)sizeof(Actor);
+	float check = (bufferLen - sizeof(unsigned int)) / (float)sizeof(Actor);
 	if (check - floor(check) == 0.f)
 		numActorsReceived = (int)floor(check);
 	if (numActorsReceived == -1)
@@ -418,6 +420,8 @@ void updateActors(char* buffer, int bufferLen)
 		memcpy(&id, buffer, sizeof(unsigned int));
 		memcpy(&position, buffer + sizeof(unsigned int), sizeof(Vector3D));
 		memcpy(&rotation, buffer + sizeof(unsigned int) + sizeof(Vector3D), sizeof(Vector3D));
+
+		std::cout << id << " / " << position.toString() << std::endl;
 
 		// -- Actor not found -- //
 		if (actorMap.count(id) == 0) 

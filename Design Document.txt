@@ -287,3 +287,18 @@ server so rollbacks don't need to happen
 Client updates server each frame. It's slower than the server so this shouldn't be an issue 
 PROBLEM: It might be. With 4 clients, the server might become overloaded. In fact, with 4 clients, it likely will.
 SOLUTION: Synchronized updates from both server and client is the solution same as it was for the server to client.
+	- Because the game is only meant to be played over LAN, it's probably fine that we simply guess that the client should be
+	  5 frames ahead of the client
+
+
+
+
+---- Input Handling and its Relation to Fixed-Updates ----
+PROBLEM: Player input can change several times between fixed updates. How do we handle this?
+
+SOLUTION: We're learning, but we also want progress. 
+ - Movement : Just process action on a fixed update basis. Interp can use older frames if packets are dropped
+ - Shooting : Queue number of attacks made per a frame. We know the attack speed of the ship so we can calculate time between attacks
+              using delta time
+
+ALT SOLUTION : Have the client send updates at a faster rate than the server. This allows for higher input resolution for the client

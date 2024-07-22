@@ -1,5 +1,19 @@
-[ ] Synchronized Updates for Client and Server
-	[ ] Pre-calculating the next server update between server updates
+[X] Fixed-Timestep Updates for Client and Server
+
+
+[x] Client sends server updates.
+ 	[x] How to reflect changes in client state that occur between updates?
+		- SOLUTION: For movement, just rely on fixed upates and interpolation.
+	[ ] How to reflect actions that might need to happen multiple times per a fixed update?
+
+
+[X] Server sends client update game state. Client copies game state
+
+
+[ ] Client side interpolation
+
+
+[ ] Client Reconciliation when prediction differs significantly from client state
 
 
 
@@ -9,3 +23,8 @@ NOTE: This feature is useful for rollback, but not the most important feature to
 	[ ] Make sure stateSequenceId's cannot exceed maximum number of states. implement circular system
 	[ ] Using the rate of state creation, decide on a value for MAX_STATES
 
+
+
+
+---------- Low Priority Tasks ----------
+[ ] Move the fixed update period to the dll.

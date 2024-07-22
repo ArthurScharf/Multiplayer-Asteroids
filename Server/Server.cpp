@@ -37,7 +37,7 @@ public:
 	}
 };
 
-float updatePeriod = 1.f / 4.f; // Verbose to allow easy editing. Should be properly declared later // 20.f; 
+float updatePeriod = 1.f / 20.f; // Verbose to allow easy editing. Should be properly declared later // 4.f;
 float deltaTime = 0.f;
 
 unsigned int stateSequenceId = 0;
@@ -183,10 +183,11 @@ int main()
 					}
 					Vector3D movementDir;
 					memcpy(&movementDir, recvBuffer + 1, sizeof(Vector3D));
+					// std::cout << movementDir.toString() << std::endl;
 					// std::cout << (movementDir * 70.f * deltaTime).toString() << std::endl;
 					Actor* actor = clients[ipAddr];
-					actor->setPosition(actor->getPosition() + (70.f * movementDir * deltaTime));
-					// std::cout << actor->getId() << "/" << actor->getPosition().toString() << std::endl;
+					actor->setPosition(actor->getPosition() + (70.f * movementDir * updatePeriod));
+					std::cout << actor->getId() << "/" << actor->getPosition().toString() << std::endl;
 					break;
 				}
 				case 't': // Case used for testing. Should not be in the finals build
@@ -204,28 +205,28 @@ int main()
 		}
 
 
-
 		// -- Sending Data: Actor Replication -- //
 		if (elapsedTimeSinceUpdate >= updatePeriod) // ~20 times a second       
 		{
 			elapsedTimeSinceUpdate -= updatePeriod;
 			stateSequenceId++;
-			std::cout << "Fixed Update: " << stateSequenceId << std::endl;
+			// std::cout << "Fixed Update: " << stateSequenceId << std::endl;
 
 			if (numClients <= 0) continue;
 	
 			// - Packing actor data - //
 			sendBuffer[0] = 'r'; // 'r' --> actor replication message
 			char* tempBuffer = sendBuffer;
-			tempBuffer += 2;
+			tempBuffer += 1; // skipping message type byte
 			// memcpy(sendBuffer + 1, (void*)stateSequenceId++, sizeof(unsigned int));
+			tempBuffer += sizeof(unsigned int); // Skipping state sequence ID bytes
 			for (unsigned int i = 0; i < numActors; i++)
 			{
 				memcpy(tempBuffer, actors[i], sizeof(Actor));
 				tempBuffer += sizeof(Actor);
 			}
 			// - Sending Actor data - //
-			unsigned int bufferLen = 1 + (numActors * sizeof(Actor));
+			unsigned int bufferLen = 1 + sizeof(unsigned int) + (numActors * sizeof(Actor));
 			for (auto it = clients.begin(); it != clients.end(); ++it)
 			{
 				//printf("Sending Snapshot\n");
