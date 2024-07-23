@@ -37,7 +37,7 @@ public:
 	}
 };
 
-float updatePeriod = 1.f / 20.f; // Verbose to allow easy editing. Should be properly declared later // 4.f;
+float updatePeriod = 1.f / 20.f; // Verbose to allow easy editing. Should be properly declared later // 20.f
 float deltaTime = 0.f;
 
 unsigned int stateSequenceId = 0;
@@ -104,6 +104,7 @@ int main()
 
 
 		// BUG: There are two actors being created when we create an actor here
+		
 		// -- Checking for spawn/respawn of player characters -- //
 		auto iter = clients.begin();
 		while (iter != clients.end())
@@ -115,7 +116,7 @@ int main()
 				Vector3D position(0.f);
 				Vector3D rotation(0.f);
 				iter->second = createActor(position, rotation);
-				printf("Creating Actor\n");
+				printf("Creating client actor\n");
 				// QUESTION: Why would creating an actor in this way result in a nullptr error when trying to replicate
 				//iter->second = new Actor(position, rotation);
 				//numActors++;
@@ -187,7 +188,7 @@ int main()
 					// std::cout << (movementDir * 70.f * deltaTime).toString() << std::endl;
 					Actor* actor = clients[ipAddr];
 					actor->setPosition(actor->getPosition() + (70.f * movementDir * updatePeriod));
-					std::cout << actor->getId() << "/" << actor->getPosition().toString() << std::endl;
+					// std::cout << actor->getId() << "/" << actor->getPosition().toString() << std::endl;
 					break;
 				}
 				case 't': // Case used for testing. Should not be in the finals build
@@ -210,7 +211,7 @@ int main()
 		{
 			elapsedTimeSinceUpdate -= updatePeriod;
 			stateSequenceId++;
-			// std::cout << "Fixed Update: " << stateSequenceId << std::endl;
+			std::cout << "Fixed Update: " << stateSequenceId << std::endl;
 
 			if (numClients <= 0) continue;
 	

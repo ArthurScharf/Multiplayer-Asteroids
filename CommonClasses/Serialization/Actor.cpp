@@ -7,6 +7,50 @@
 
 
 unsigned int Actor::nextId = 0;
+unsigned int Actor::numCachedModels = 0;
+Model* Actor::modelCache[256];
+
+
+void Actor::loadModelCache()
+{
+	modelCache[numCachedModels] = new Model("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx");
+	modelCache[numCachedModels] = new Model("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/chair/chair.fbx");
+	numCachedModels = 2;
+}
+
+
+Actor* Actor::createActorFromBlueprint(char blueprintId, Vector3D& position, Vector3D& rotation, unsigned int replicatedId, bool bUseReplicatedId)
+{
+	std::string path = "";
+	switch (blueprintId)
+	{
+		case '\x0': // 0 --> Gear
+		{
+			path = "C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx";
+			break;
+		}
+		case '\x1': // 1 --> Chair
+		{
+			path = "C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/chair/chair.fbx";
+			break;
+		}
+		default: // Models don't need to be loaded if the server is invoking this method.
+		{
+			break;
+		}
+	}
+
+	Actor* actor = (bUseReplicatedId) ? new Actor(position, rotation, replicatedId) : new Actor(position, rotation);
+
+	if (path != "")
+	{
+		Model* temp = new Model(path);
+		if (temp) actor->model = temp;
+	}
+
+	return actor;
+}
+
 
 Actor::Actor(Vector3D& position, Vector3D& rotation)
 	: Position(position), Rotation(rotation), id(nextId++)

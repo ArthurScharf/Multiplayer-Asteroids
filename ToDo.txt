@@ -1,20 +1,33 @@
+
+
+----------  KEY ---------- 
+[ ] : Task. Will definitely be included in the project
+
+( ) : Morphing task. Usually something to understand so an actual task can replace this one
+
+
+
+
+
+
+-----------------------------------
+---------- Uncategorized ---------- 
+-----------------------------------
 [X] Fixed-Timestep Updates for Client and Server
 
 
 [x] Client sends server updates.
  	[x] How to reflect changes in client state that occur between updates?
 		- SOLUTION: For movement, just rely on fixed upates and interpolation.
-	[ ] How to reflect actions that might need to happen multiple times per a fixed update?
-
 
 [X] Server sends client update game state. Client copies game state
 
 
-[ ] Client side interpolation
+[1/2] Client side interpolation
+	- For now, having the client simply move actors using it's delta time, between fixed updates is an ok solution
 
 
-[ ] Client Reconciliation when prediction differs significantly from client state
-
+[ ] Handling Actions that will often occur several times between fixed updates
 
 
 NOTE: This feature is useful for rollback, but not the most important feature to be implementing
@@ -24,7 +37,37 @@ NOTE: This feature is useful for rollback, but not the most important feature to
 	[ ] Using the rate of state creation, decide on a value for MAX_STATES
 
 
+( ) Work out why we might need state sequence Id's, if at all
 
 
+
+
+
+
+
+-------------------------------------
+---------- Spawning Actors ----------
+------------------------------------- 
+
+[ ] Pre-load and cache all the meshes needed for creating actors so this isn't done when actors are spawned
+	[x] Implement a static method in Actor that caches the meshes at runtime
+	[ ] fix bug that is preventing the loading from being done as the first step in the client's main function	
+
+[ ] Handle responsive client side predicted spawning of actors
+	[ ] Spawning ghost actor on client side & sending spawn request. Frame data must be included in request so server knows which frame is 
+	    the spawn frame.
+	[ ] Ghost actor must able to be associated with network id if server proxy is successfully spawned
+
+
+
+
+
+----------------------------------------
 ---------- Low Priority Tasks ----------
+----------------------------------------
+
 [ ] Move the fixed update period to the dll.
+
+[ ] Client Reconciliation when prediction differs significantly from client state
+
+( ) Do we need to remove the buffer consuming loop? Fixed-Updates might solve this issue

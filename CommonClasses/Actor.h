@@ -14,22 +14,36 @@
 
 
 /*
-* This actor class implements the networking interface
+* The Actor class initialises a static array of mesh pointers at runtime.
+* This game isn't meant to be expanded upon once it's finished. As such,
+* it is reasonable that the meshes can be cached in the only class that uses them
 */
 class Actor
 {
-// -- Members -- //
+// -- Static Members -- //
 private:
 	/* ID's are shared across the network */
 	static unsigned int nextId;
-	const unsigned int id; // 4
-	Vector3D Position; // 12
+	/* cached models for constructing actor blueprints */
+	static Model* modelCache[256];
+	static unsigned int numCachedModels;
+
+// -- Static Methods -- //
+public:
+	// Should be called before constructing any using create actor from blueprint method.
+	static void loadModelCache(); 
+	static Actor* createActorFromBlueprint(char blueprintId, Vector3D& position, Vector3D& rotation, unsigned int replicatedId, bool bUseReplicatedId = false); 
+
+// -- Members -- //
+private:
+	const unsigned int id;
+	Vector3D Position;
 	Vector3D Rotation; // Should be a rotator. For now, is a Vector3D
-	//Mesh mesh; TODO 
 	Model* model;
 
 // -- Methods, Constructors, Destructors -- //
 public:
+	// NOTE: These might be redundant since we will probably never need to construct an actor that isn't a blueprint
 	Actor(Vector3D& position, Vector3D& rotation); // Server side
 	Actor(Vector3D& position, Vector3D& rotation, unsigned int replicatedId); // Client side
 	~Actor();

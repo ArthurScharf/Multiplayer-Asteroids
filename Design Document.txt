@@ -1,10 +1,3 @@
------ TODO -----
-Move "Enter Server IP" code into loop so we don't need to restart client if server is not found
-
-Alter Socket code to allow for recvfrom to work. recvfrom is blocking and we need the client and
-the server to both send and receive data simultaneously. Note that we should avoid multiple threads
-
-
 
 
 ----- BUG -----
@@ -302,3 +295,30 @@ SOLUTION: We're learning, but we also want progress.
               using delta time
 
 ALT SOLUTION : Have the client send updates at a faster rate than the server. This allows for higher input resolution for the client
+
+
+PROBLEM: Rabid changes in input that occur between fixed-updates on the client cause small jitters because server doesn't
+         receive this information.
+SOLUTION? : Increase fixed-update period?
+
+
+
+
+
+---- Pre-loading & Caching FBX meshes ----
+Factories are a simple hardcoded solution for generating certain types of actors.
+Factories would handle the loading of mesh data when constructed
+
+PROBLEM: How do I associate client-proxy with server-copy since the client proxy is spawned first?
+SOLUTION: Send request for spawn with spawnId. Server replies with spawnId and networkId of spawned actor. 
+	  client moves proxy to normal pool of actors since it will receive an update on next fixed update
+
+NOTE: Two collections of actors. normal actors and unpairedNetworkProxies.
+      unpairedNetworkProxies is a true subset of actors
+
+
+
+
+
+NOTE: blueprint ID's are char*s because we definitely won't need more than 256 blueprints
+

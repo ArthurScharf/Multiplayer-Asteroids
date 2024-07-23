@@ -97,6 +97,7 @@ const float playerSpeed = 70.f; // The rate at which the player changes position
 
 
 
+// TODO: Currently unused
 /* Stores the states created by the client at each fixed update.
  * Used with incoming states from the server to compare for discrepencies
  */
@@ -107,7 +108,7 @@ CircularBuffer stateBuffer;
 // -- Time -- //
 float deltaTime = 0.f;
 float lastFrame = 0.f;
-float updatePeriod = 1.f / 20.f; // Verbose to allow easy editing. Should be properly declared later 
+float updatePeriod = 1.f / 20.f; // Verbose to allow easy editing. Should be properly declared later 20.f
 float elapsedTimeSinceUpdate = 0.f;
 unsigned int stateSequenceId = 0;
 
@@ -134,6 +135,8 @@ void handleServerMessage(char* buffer, unsigned int bufferLen);
 // ---- CLIENT ---- //
 int main()
 {
+
+
 	// ---------- Networking ---------- //
 	char sendBuffer[1 + (MAX_ACTORS * sizeof(Actor))];
 	char* recvBuffer{};
@@ -209,21 +212,30 @@ int main()
 	);
 
 
+
+	// BUG: The block below should be first in main. Haven't fixed the bug that allows it to be so
+
+	// ---------- Initializing ---------- //
+	Actor::loadModelCache(); // Initializes model cache so blueprinted actors can be created
+
+
+
+
 	// ---------- Main loop ---------- //
 	while (!glfwWindowShouldClose(window))
 	{
 
-		// -- Per-frame logic -- //
+		// ---- Per-frame logic ---- //
 		float currentFrame = static_cast<float>(glfwGetTime());
 		deltaTime = currentFrame - lastFrame;
 		lastFrame = currentFrame;
 		elapsedTimeSinceUpdate += deltaTime;
 
-		// -- Input Handling -- //
+		// ---- Input Handling ---- //
 		movementDir.x = movementDir.y = movementDir.z = 0.f; // Reset for this frame
 		processInput(window);
 
-		// -- Rendering Actors -- //
+		// ---- Rendering Actors ---- //
 		glClearColor(0.1f, 0.1f, 0.1f, 1.f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -251,7 +263,7 @@ int main()
 			elapsedTimeSinceUpdate -= updatePeriod;
 			stateSequenceId++;
 
-			// std::cout << stateSequenceId << std::endl;
+			std::cout << stateSequenceId << std::endl;
 			// std::cout << movementDir.toString() << std::endl;
 
 			// TODO: AAAA
@@ -261,8 +273,8 @@ int main()
 			sock.sendData(sendBuffer, sizeof(Vector3D) + 1, serverAddr);
 		}
 
-
-		// -- Receiving Data from Server -- // Receives data from server regardless of state
+		// TODO: Might be better to remove the duplicate checks that empty the socket buffer
+		// ----  Receiving Data from Server ----  // Receives data from server regardless of state.
 		char* tempBuffer{};
 		int recvBufferLen = 0;
 		int tempBufferLen = 0;
@@ -338,7 +350,7 @@ void processInput(GLFWwindow* window)
 	movementDir.Normalize();
 	
 	// TODO: Allow client side simulation
-	// playerActor->setPosition(playerActor->getPosition() + (movementDir * 70.f * deltaTime));
+	playerActor->setPosition(playerActor->getPosition() + (movementDir * 70.f * deltaTime));
 }
 
 
@@ -421,17 +433,16 @@ void updateActors(char* buffer, int bufferLen)
 		memcpy(&position, buffer + sizeof(unsigned int), sizeof(Vector3D));
 		memcpy(&rotation, buffer + sizeof(unsigned int) + sizeof(Vector3D), sizeof(Vector3D));
 
-		std::cout << id << " / " << position.toString() << std::endl;
+		// std::cout << id << " / " << position.toString() << std::endl;
 
-		// -- Actor not found -- //
+		// -- New Actor Encountered -- //
 		if (actorMap.count(id) == 0) 
 		{
 			// -- Add actor to map -- //
-			actor = new Actor(position, rotation, id);
-			actor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx");
+			actor = Actor::createActorFromBlueprint('\x0', position, rotation, id, true);
+			//actor = new Actor(position, rotation, id);
+			// actor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx");
 			actorMap[id] = actor;
-
-			// -- GameState -- //
 		}
 		else // -- Actor found. Updating Actor data -- //
 		{
