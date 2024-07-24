@@ -85,15 +85,14 @@ bool bIsConnectedToServer = false;
 */
 
 
-// ---- Player Character ---- //
-// A Map is used so we don't need to create an actor each time we parse actor data to see if that actor exists. We can just see if it's id has been placed in this map
+ 
+// key : actor network ID
+// value:  actor
 std::map<unsigned int, Actor*> actorMap;
 // Stores network ID for actor this client is controlling. Necessary bc a client can be connected without an actor
 unsigned int playerActorID = -1;
 // Pointer to actor being controlled by this client. Avoids repeated lookups using playerActorID
 Actor* playerActor = nullptr;
-Vector3D movementDir;
-const float playerSpeed = 70.f; // The rate at which the player changes position
 
 
 
@@ -118,9 +117,10 @@ const std::string gearFBX_path = "C:/Users/User/source/repos/Multiplayer-Asteroi
 
 // -- Forward Declaring Functions -- //
 void processInput(GLFWwindow* window);
-void terminateProgram();
-void updateActors(char* buffer, int bufferLen);
+void moveActors(float deltaTime); // Moves the actors locally. Lower priority actor update than the fixed updates
+void fixedUpdateActors(char* buffer, int bufferLen);
 void handleServerMessage(char* buffer, unsigned int bufferLen);
+void terminateProgram();
 
 
 
@@ -232,8 +232,8 @@ int main()
 		elapsedTimeSinceUpdate += deltaTime;
 
 		// ---- Input Handling ---- //
-		movementDir.x = movementDir.y = movementDir.z = 0.f; // Reset for this frame
 		processInput(window);
+		moveActors(deltaTime);
 
 		// ---- Rendering Actors ---- //
 		glClearColor(0.1f, 0.1f, 0.1f, 1.f);
@@ -266,10 +266,12 @@ int main()
 			std::cout << stateSequenceId << std::endl;
 			// std::cout << movementDir.toString() << std::endl;
 
+			if (!playerActor) continue; // BUG: Remove this to see bug
 			// TODO: AAAA
+			Vector3D REMOVE_THIS = playerActor->getMoveDirection();
 			char sendBuffer[sizeof(Vector3D) + 1]{ 0 }; // Schema: movement input, other keyboard like quitting or shooting
 			sendBuffer[0] = 'r'; // 'r' --> actor replication
-			memcpy(sendBuffer + 1, &movementDir, sizeof(Vector3D)); // Copying movement direction
+			memcpy(sendBuffer + 1, &REMOVE_THIS, sizeof(Vector3D)); // TODO: This should be fixed when actor data and size are properly serialized
 			sock.sendData(sendBuffer, sizeof(Vector3D) + 1, serverAddr);
 		}
 
@@ -301,7 +303,6 @@ int main()
 			handleServerMessage(recvBuffer, recvBufferLen);
 		}
 
-
 		glfwPollEvents();
 		glfwSwapBuffers(window);
 	}//~ Main Loop
@@ -322,35 +323,42 @@ void processInput(GLFWwindow* window)
 		glfwSetWindowShouldClose(window, true);
 	if (playerActor == nullptr) return; 
 
-
+	Vector3D moveDirection(0.f);
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 	{
-		movementDir += Vector3D(0.f, 1.f, 0.f);
+		moveDirection += Vector3D(0.f, 1.f, 0.f);
 	}
 	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
 	{
-		movementDir += Vector3D(0.f, -1.f, 0.f);
+		moveDirection += Vector3D(0.f, -1.f, 0.f);
 	}
 	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
 	{
-		movementDir += Vector3D(1.f, 0.f, 0.f);
+		moveDirection += Vector3D(1.f, 0.f, 0.f);
 	}
 	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
 	{
-		movementDir += Vector3D(-1.f, 0.f, 0.f);
+		moveDirection += Vector3D(-1.f, 0.f, 0.f);
 	}
 	if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
 	{
-		movementDir += Vector3D(0.f, 0.f, -1.f);
+		moveDirection += Vector3D(0.f, 0.f, -1.f);
 	}
 	if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
 	{
-		movementDir += Vector3D(0.f, 0.f, 1.f);
+		moveDirection += Vector3D(0.f, 0.f, 1.f);
 	}
-	movementDir.Normalize();
-	
-	// TODO: Allow client side simulation
-	playerActor->setPosition(playerActor->getPosition() + (movementDir * 70.f * deltaTime));
+	moveDirection.Normalize();
+	playerActor->setMoveDirection(moveDirection);
+}
+
+
+void moveActors(float deltaTime)
+{
+	for (auto iter = actorMap.begin(); iter != actorMap.end(); iter++)
+	{
+		iter->second->setPosition(iter->second->getMoveDirection() * iter->second->getMoveSpeed() * deltaTime);
+	}
 }
 
 
@@ -372,7 +380,7 @@ void handleServerMessage(char* buffer, unsigned int bufferLen)
 			/* Updates actor states to match server data.
 			*  Spawns actors that were sent to client, but don't yet exist
 			*/
-			updateActors(++buffer, --bufferLen);
+			fixedUpdateActors(++buffer, --bufferLen);
 			break;
 		}
 		case 'i':	// Receiving Controlled Actor ID
@@ -393,7 +401,7 @@ void handleServerMessage(char* buffer, unsigned int bufferLen)
 }
 
 
-void updateActors(char* buffer, int bufferLen)
+void fixedUpdateActors(char* buffer, int bufferLen)
 {
 	// TODO: Actor's must have a mesh instantiated when they're created. Data sent across must indicate the type of actor
 	//       Alternatively, we send spawn and destroy messages, which contain all the required actor data, including the type of actor
@@ -413,7 +421,7 @@ void updateActors(char* buffer, int bufferLen)
 		numActorsReceived = (int)floor(check);
 	if (numActorsReceived == -1)
 	{
-		std::cout << "Client::updateActors -- length of buffer not wholly divisible by sizeof(Actor)\n";
+		std::cout << "Client::fixedUpdateActors -- length of buffer not wholly divisible by sizeof(Actor)\n";
 		return;
 	}
 
@@ -457,7 +465,7 @@ void updateActors(char* buffer, int bufferLen)
 
 		if (id == playerActorID && actor != playerActor)
 		{
-			printf("Client::updateActors -- Updating playerActor\n");
+			printf("Client::fixedUpdateActors -- Updating playerActor\n");
 			playerActor = actor;
 		}
 		buffer += sizeof(Actor);

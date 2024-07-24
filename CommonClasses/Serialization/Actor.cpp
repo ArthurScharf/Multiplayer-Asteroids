@@ -22,16 +22,19 @@ void Actor::loadModelCache()
 Actor* Actor::createActorFromBlueprint(char blueprintId, Vector3D& position, Vector3D& rotation, unsigned int replicatedId, bool bUseReplicatedId)
 {
 	std::string path = "";
+	float moveSpeed;
 	switch (blueprintId)
 	{
 		case '\x0': // 0 --> Gear
 		{
 			path = "C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx";
+			moveSpeed = 70.f; // Character movespeed
 			break;
 		}
 		case '\x1': // 1 --> Chair
 		{
 			path = "C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/chair/chair.fbx";
+			moveSpeed = 120.f; // projectile movespeed
 			break;
 		}
 		default: // Models don't need to be loaded if the server is invoking this method.
@@ -41,24 +44,23 @@ Actor* Actor::createActorFromBlueprint(char blueprintId, Vector3D& position, Vec
 	}
 
 	Actor* actor = (bUseReplicatedId) ? new Actor(position, rotation, replicatedId) : new Actor(position, rotation);
-
+	actor->setMoveSpeed(moveSpeed);
 	if (path != "")
 	{
 		Model* temp = new Model(path);
 		if (temp) actor->model = temp;
 	}
-
 	return actor;
 }
 
 
 Actor::Actor(Vector3D& position, Vector3D& rotation)
-	: Position(position), Rotation(rotation), id(nextId++)
+	: Position(position), Rotation(rotation), id(nextId++), moveDirection(0.f), moveSpeed(0.f)
 {}
 
 
 Actor::Actor(Vector3D& position, Vector3D& rotation, unsigned int replicatedId)
-	 : Position(position), Rotation(rotation), id(replicatedId)
+	 : Position(position), Rotation(rotation), id(replicatedId), moveDirection(0.f), moveSpeed(0.f)
 {
 	model = nullptr; // Why is this insufficient to avoid a bug from loading? If I use InitializeModel() with it failing, the system doesnt throw any exceptions
 

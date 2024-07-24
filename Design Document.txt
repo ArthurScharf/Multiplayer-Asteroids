@@ -310,6 +310,7 @@ Factories are a simple hardcoded solution for generating certain types of actors
 Factories would handle the loading of mesh data when constructed
 
 PROBLEM: How do I associate client-proxy with server-copy since the client proxy is spawned first?
+
 SOLUTION: Send request for spawn with spawnId. Server replies with spawnId and networkId of spawned actor. 
 	  client moves proxy to normal pool of actors since it will receive an update on next fixed update
 
@@ -321,4 +322,5 @@ NOTE: Two collections of actors. normal actors and unpairedNetworkProxies.
 
 
 NOTE: blueprint ID's are char*s because we definitely won't need more than 256 blueprints
+
 

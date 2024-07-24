@@ -187,7 +187,7 @@ int main()
 					// std::cout << movementDir.toString() << std::endl;
 					// std::cout << (movementDir * 70.f * deltaTime).toString() << std::endl;
 					Actor* actor = clients[ipAddr];
-					actor->setPosition(actor->getPosition() + (70.f * movementDir * updatePeriod));
+					actor->setPosition(actor->getPosition() + (actor->getMoveSpeed() * movementDir * updatePeriod));
 					// std::cout << actor->getId() << "/" << actor->getPosition().toString() << std::endl;
 					break;
 				}

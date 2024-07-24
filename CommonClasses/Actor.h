@@ -39,7 +39,10 @@ private:
 	const unsigned int id;
 	Vector3D Position;
 	Vector3D Rotation; // Should be a rotator. For now, is a Vector3D
+	float moveSpeed;
+	Vector3D moveDirection; // Normalized vector choosing which direction this actor moves
 	Model* model;
+	
 
 // -- Methods, Constructors, Destructors -- //
 public:
@@ -70,16 +73,21 @@ public:
 	unsigned int getId() { return id; }
 
 	Vector3D getPosition() { return Position; }
-	void setPosition(Vector3D position) 
-	{
-		//position.Normalize();
-		Position = position;
-	}
+	void setPosition(Vector3D position) { Position = position; }
 
 	Vector3D getRotation() { return Rotation; }
-	void setRotation(Vector3D rotation)
-	{
-		//rotation.Normalize();
-		Rotation = rotation;
+	void setRotation(Vector3D rotation) { Rotation = rotation; }
+
+	float getMoveSpeed() { return moveSpeed; }
+	void setMoveSpeed(float _moveSpeed) { moveSpeed = _moveSpeed; }
+
+	Vector3D getMoveDirection() 
+	{ 
+		return moveDirection; 
+	}
+	void setMoveDirection(Vector3D _moveDirection) 
+	{ 
+		_moveDirection.Normalize();
+		moveDirection = _moveDirection; 
 	}
 };

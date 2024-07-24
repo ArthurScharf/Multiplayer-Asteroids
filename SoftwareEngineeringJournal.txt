@@ -1,0 +1,5 @@
+Consider that if two different programs should do the same thing, use a library. This isn't about DRY coding.
+We want to guarantee that both programs will apply the same transformation to the data
+
+
+

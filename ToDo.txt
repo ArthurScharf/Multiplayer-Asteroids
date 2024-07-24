@@ -30,6 +30,10 @@
 [ ] Handling Actions that will often occur several times between fixed updates
 
 
+[ ] extra data is being sent over the network each frame because sizeof(Actor) is being used where actor has
+    several data members that don't need to be serialized. This should be fixed
+
+
 NOTE: This feature is useful for rollback, but not the most important feature to be implementing
 [x] Implement a circular buffer on the client, for Client state, and received server state
 	[ ] Modify client's reading of packets and server's writing of packets to include the state sequence number
@@ -37,7 +41,7 @@ NOTE: This feature is useful for rollback, but not the most important feature to
 	[ ] Using the rate of state creation, decide on a value for MAX_STATES
 
 
-( ) Work out why we might need state sequence Id's, if at all
+
 
 
 
@@ -49,7 +53,7 @@ NOTE: This feature is useful for rollback, but not the most important feature to
 ---------- Spawning Actors ----------
 ------------------------------------- 
 
-[ ] Pre-load and cache all the meshes needed for creating actors so this isn't done when actors are spawned
+[x] Pre-load and cache all the meshes needed for creating actors so this isn't done when actors are spawned
 	[x] Implement a static method in Actor that caches the meshes at runtime
 	[ ] fix bug that is preventing the loading from being done as the first step in the client's main function	
 
@@ -69,5 +73,9 @@ NOTE: This feature is useful for rollback, but not the most important feature to
 [ ] Move the fixed update period to the dll.
 
 [ ] Client Reconciliation when prediction differs significantly from client state
+
+NOTE: The game is for LAN. At the moment, simply sending each state seems to work. We'll fry other fish first
+[ ] Implement State buffer on client
+[ ] Design Reconciliation approach for locally generated client states differ from those predicted by the server
 
 ( ) Do we need to remove the buffer consuming loop? Fixed-Updates might solve this issue
