@@ -16,6 +16,12 @@ Vector3D::Vector3D(float _x, float _y, float _z)
 {};
 
 
+float Vector3D::length()
+{
+	return sqrt(pow(x, 2) + pow(y, 2) + pow(z, 2));
+}
+
+
 void Vector3D::Normalize()
 {
 	{

@@ -82,17 +82,17 @@ int UDPSocket::init(bool bIsServer)
 
 	
 
-	// Binding
+	// -- Binding -- //
 	if (bind(sock, res->ai_addr, res->ai_addrlen) == SOCKET_ERROR)
 	{
-		std::cout << "Server::bind() failed: " << WSAGetLastError() << std::endl;
+		std::cout << "bind() failed: " << WSAGetLastError() << std::endl;
 		closesocket(sock);
 		WSACleanup();
 		return WSAGetLastError();
 	}
 	else
 	{
-		std::cout << "Server::bind() OK" << std::endl;
+		std::cout << "bind() OK" << std::endl;
 	}
 
 	freeaddrinfo(res);

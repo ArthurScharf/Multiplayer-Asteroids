@@ -13,6 +13,9 @@ There is a race condition for client input to be processed
 Despite the fact that the server doesn't use any rendering code, common classes stores the classes
 used for this. Might be useful in the future, but for now, represents a point of confusion
 
+Code for reading certain kinds of messages is repeated a lot. Better to store this code in CommonClasses and use it
+on client and server
+
 
 ---- Overview ----
 OpenGL Rendering
@@ -324,3 +327,16 @@ NOTE: Two collections of actors. normal actors and unpairedNetworkProxies.
 NOTE: blueprint ID's are char*s because we definitely won't need more than 256 blueprints
 
 
+
+
+
+
+
+
+
+
+Pool at dooly's (not Katie's doolys)
+Art Museum
+Escape rooms
+Shopping
+Dinner at Comedy Club

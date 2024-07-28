@@ -13,6 +13,35 @@
 #define MAX_ACTORS 64
 
 
+
+// TODO: Why didn't I want to use the ENUMS?
+//enum ActorBlueprint
+//{
+//	ABP_GEAR,
+//	ABP_CHAIR
+//};
+#define ABP_GEAR '\x0'
+#define ABP_CHAIR '\x1'
+
+
+/*
+* - Serves as a schema for reading actor data from a stream without constructing an entire actor
+* - Can be used for detecting required size when working with net buffers
+*/
+struct ActorNetData
+{
+	const unsigned int id;
+	Vector3D Position;
+	Vector3D Rotation; // Should be a rotator. For now, is a Vector3D
+	Vector3D moveDirection; // Normalized vector choosing which direction this actor moves
+
+	ActorNetData()
+		: id(0), Position(0.f), Rotation(0.f), moveDirection(0.f)
+	{}
+};
+
+
+
 /*
 * The Actor class initialises a static array of mesh pointers at runtime.
 * This game isn't meant to be expanded upon once it's finished. As such,
@@ -32,15 +61,15 @@ private:
 public:
 	// Should be called before constructing any using create actor from blueprint method.
 	static void loadModelCache(); 
-	static Actor* createActorFromBlueprint(char blueprintId, Vector3D& position, Vector3D& rotation, unsigned int replicatedId, bool bUseReplicatedId = false); 
+	static Actor* createActorFromBlueprint(char blueprintId, Vector3D& position, Vector3D& rotation, unsigned int replicatedId, bool bClient = false); 
 
 // -- Members -- //
 private:
 	const unsigned int id;
 	Vector3D Position;
 	Vector3D Rotation; // Should be a rotator. For now, is a Vector3D
-	float moveSpeed;
 	Vector3D moveDirection; // Normalized vector choosing which direction this actor moves
+	float moveSpeed;
 	Model* model;
 	
 
@@ -50,6 +79,9 @@ public:
 	Actor(Vector3D& position, Vector3D& rotation); // Server side
 	Actor(Vector3D& position, Vector3D& rotation, unsigned int replicatedId); // Client side
 	~Actor();
+
+
+	void addToPosition(Vector3D addend);
 
 	std::string toString();
 
@@ -64,7 +96,7 @@ public:
 	* If we allowed the return actor to be a parameter, we allow a user to pass any kind of actor pointer,
 	* which run's it's own selection of issues
 	*/
-	static Actor* deserialize(const char* buffer, unsigned int& bytesRead); 
+	static ActorNetData deserialize(const char* buffer, unsigned int& bytesRead); 
 
 
 

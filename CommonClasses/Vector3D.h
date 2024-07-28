@@ -17,6 +17,9 @@ public:
 	Vector3D(float val);
 	Vector3D(float _x, float _y, float _z);
 
+
+	float length();
+
 	/* Normalizes the vector 
 	Is ternary operator the best way to check for 0?
 	*/

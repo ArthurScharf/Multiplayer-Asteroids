@@ -26,16 +26,19 @@
 /*
 * Exists so client IP's can be used as key's in a client to actor map.
 */
-struct ipAddress
+struct IpAddress
 {
-public:
 	in_addr _in_addr;
 
-	bool operator<(const ipAddress& other) const
+	bool operator<(const IpAddress& other) const
 	{
 		return _in_addr.S_un.S_addr < other._in_addr.S_un.S_addr;
 	}
 };
+
+
+
+
 
 float updatePeriod = 1.f / 20.f; // Verbose to allow easy editing. Should be properly declared later // 20.f
 float deltaTime = 0.f;
@@ -44,7 +47,7 @@ unsigned int stateSequenceId = 0;
 
 
 #define MAX_CLIENTS 4
-std::map<ipAddress, Actor*> clients;
+std::map<IpAddress, Actor*> clients;
 unsigned int numClients = 0;
 
 
@@ -115,7 +118,11 @@ int main()
 				// TODO: Properly choose a position for each client actor
 				Vector3D position(0.f);
 				Vector3D rotation(0.f);
-				iter->second = createActor(position, rotation);
+				iter->second = Actor::createActorFromBlueprint('\x0', position, rotation, 0, false);
+				actors[numActors] = iter->second;
+				numActors++;
+				//iter->second = createActor(position, rotation);
+				//iter->second->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx");
 				printf("Creating client actor\n");
 				// QUESTION: Why would creating an actor in this way result in a nullptr error when trying to replicate
 				//iter->second = new Actor(position, rotation);
@@ -150,7 +157,7 @@ int main()
 				{
 					std::cout << "client connected\n"; // TODO: print client IP address
 					// - Storing client ip address - //
-					ipAddress ip;
+					IpAddress ip;
 					ip._in_addr = clientAddr.sin_addr;
 					clients.insert({ ip, nullptr });
 					numClients++;
@@ -166,11 +173,9 @@ int main()
 				}
 				case 'r':
 				{
-					//std::cout << "Server::main -- Received client replication" << std::endl;
 					// Receives client inputs and uses them to update the state of that client's playerActor
 					// TODO: Handle rotation and action inputs like quitting or shooting
-					// That I must construct one of these feels code smelly
-					ipAddress ipAddr;
+					IpAddress ipAddr; // That I must construct one of these feels code smelly
 					ipAddr._in_addr = clientAddr.sin_addr;
 					if (clients.count(ipAddr) == 0)
 					{
@@ -182,16 +187,13 @@ int main()
 						// The client attempting to replicate has no actor to move
 						break; 
 					}
-					Vector3D movementDir;
-					memcpy(&movementDir, recvBuffer + 1, sizeof(Vector3D));
-					// std::cout << movementDir.toString() << std::endl;
-					// std::cout << (movementDir * 70.f * deltaTime).toString() << std::endl;
+					ActorNetData netData;
+					memcpy(&netData, recvBuffer + 1, sizeof(netData));
 					Actor* actor = clients[ipAddr];
-					actor->setPosition(actor->getPosition() + (actor->getMoveSpeed() * movementDir * updatePeriod));
-					// std::cout << actor->getId() << "/" << actor->getPosition().toString() << std::endl;
+					actor->setPosition(actor->getPosition() + (actor->getMoveSpeed() * netData.moveDirection * updatePeriod));
 					break;
 				}
-				case 't': // Case used for testing. Should not be in the finals build
+				case 't': // Case used for testing. Should not be in the final build
 				{
 					if (bTesting)
 					{
@@ -211,7 +213,6 @@ int main()
 		{
 			elapsedTimeSinceUpdate -= updatePeriod;
 			stateSequenceId++;
-			std::cout << "Fixed Update: " << stateSequenceId << std::endl;
 
 			if (numClients <= 0) continue;
 	
@@ -219,11 +220,13 @@ int main()
 			sendBuffer[0] = 'r'; // 'r' --> actor replication message
 			char* tempBuffer = sendBuffer;
 			tempBuffer += 1; // skipping message type byte
-			// memcpy(sendBuffer + 1, (void*)stateSequenceId++, sizeof(unsigned int));
+			memcpy(tempBuffer, &stateSequenceId, sizeof(unsigned int));
 			tempBuffer += sizeof(unsigned int); // Skipping state sequence ID bytes
 			for (unsigned int i = 0; i < numActors; i++)
 			{
-				memcpy(tempBuffer, actors[i], sizeof(Actor));
+				// std::cout << actors[i]->getPosition().toString() << std::endl;
+				// memcpy(tempBuffer, actors[i], sizeof(Actor));
+				Actor::serialize(tempBuffer, actors[i]);
 				tempBuffer += sizeof(Actor);
 			}
 			// - Sending Actor data - //

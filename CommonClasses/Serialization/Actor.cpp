@@ -19,19 +19,19 @@ void Actor::loadModelCache()
 }
 
 
-Actor* Actor::createActorFromBlueprint(char blueprintId, Vector3D& position, Vector3D& rotation, unsigned int replicatedId, bool bUseReplicatedId)
+Actor* Actor::createActorFromBlueprint(char blueprintId, Vector3D& position, Vector3D& rotation, unsigned int replicatedId, bool bClient)
 {
 	std::string path = "";
 	float moveSpeed;
 	switch (blueprintId)
 	{
-		case '\x0': // 0 --> Gear
+		case ABP_GEAR: // 0 --> Gear
 		{
 			path = "C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx";
 			moveSpeed = 70.f; // Character movespeed
 			break;
 		}
-		case '\x1': // 1 --> Chair
+		case ABP_CHAIR: // 1 --> Chair
 		{
 			path = "C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/chair/chair.fbx";
 			moveSpeed = 120.f; // projectile movespeed
@@ -43,15 +43,20 @@ Actor* Actor::createActorFromBlueprint(char blueprintId, Vector3D& position, Vec
 		}
 	}
 
-	Actor* actor = (bUseReplicatedId) ? new Actor(position, rotation, replicatedId) : new Actor(position, rotation);
+	Actor* actor = (bClient) ? new Actor(position, rotation, replicatedId) : new Actor(position, rotation);
 	actor->setMoveSpeed(moveSpeed);
-	if (path != "")
+	if (bClient && path != "")
 	{
 		Model* temp = new Model(path);
 		if (temp) actor->model = temp;
 	}
 	return actor;
 }
+
+
+
+
+
 
 
 Actor::Actor(Vector3D& position, Vector3D& rotation)
@@ -77,6 +82,15 @@ Actor::~Actor()
 {
 	// if (model) delete model; // BUG: I'm getting a memory error related to how the memory is aligned, it seems. I'll allow a memory leak for now
 }
+
+
+void Actor::addToPosition(Vector3D addend)
+{
+	Position.x += addend.x;
+	Position.y += addend.y;
+	Position.z += addend.z;
+}
+
 
 std::string Actor::toString()
 {
@@ -105,7 +119,7 @@ void Actor::Draw(Shader& shader)
 
 unsigned int Actor::serialize(char* buffer, Actor* actor)
 {
-	unsigned int bufferLen = sizeof(Actor); // Null terminating
+	unsigned int bufferLen = sizeof(ActorNetData); // Null terminating
 	
 	unsigned int actorId = actor->getId(); 
 	memcpy(buffer, &actorId, sizeof(unsigned int));
@@ -143,27 +157,18 @@ unsigned int Actor::serialize(char* buffer, Actor* actor)
 	//std::cout << "testRot: " << testRot.toString() << std::endl;
 	//std::cout << std::endl;
 
+	Vector3D movDir = actor->getMoveDirection();
+	memcpy(buffer, &movDir, sizeof(Vector3D));
+
 	return bufferLen;
 }
 
 
-/* actor is an */
-Actor* Actor::deserialize(const char* buffer, unsigned int& bytesRead)
+/* This function doesn't care which bytes are read. Unsafe */
+ActorNetData Actor::deserialize(const char* buffer, unsigned int& bytesRead)
 {
-
-	// Actor id
-	unsigned int id;
-	memcpy(&id, buffer, sizeof(unsigned int));
-	buffer += sizeof(unsigned int);
-
-	// Actor position
-	Vector3D pos;
-	memcpy(&pos, buffer, sizeof(Vector3D));
-	buffer += sizeof(Vector3D);
-
-	// Actor rotation
-	Vector3D rot;
-	memcpy(&rot, buffer, sizeof(Vector3D));
-
-	return new Actor(pos, rot, id);
+	ActorNetData netData;
+	bytesRead = sizeof(unsigned int) + (3 * sizeof(Vector3D));
+	memcpy(&netData, buffer, bytesRead);
+	return netData;
 }

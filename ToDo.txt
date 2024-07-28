@@ -8,6 +8,13 @@
 
 
 
+--------------------------------
+---------- Start Here ----------
+--------------------------------
+
+
+
+
 
 
 -----------------------------------
@@ -23,15 +30,23 @@
 [X] Server sends client update game state. Client copies game state
 
 
-[1/2] Client side interpolation
+[x] Client side interpolation
 	- For now, having the client simply move actors using it's delta time, between fixed updates is an ok solution
+
+[x] Update Server code for moving actors. Replicated movement from clients should set their actor's moveDir, not move that actor directly.
+    This way, all actors are moved using some moveActor method. Better encapsulation
+
+
+[x] extra data is being sent over the network each frame because sizeof(Actor) is being used where actor has
+    several data members that don't need to be serialized. This should be fixed
+	- Fixed by using ActorNetData struct. Sometimes extra data is sent, but makes the program safer
+
+[ ] Client stores it's own snapshots and compares to the ones received from server when they're received
 
 
 [ ] Handling Actions that will often occur several times between fixed updates
 
 
-[ ] extra data is being sent over the network each frame because sizeof(Actor) is being used where actor has
-    several data members that don't need to be serialized. This should be fixed
 
 
 NOTE: This feature is useful for rollback, but not the most important feature to be implementing

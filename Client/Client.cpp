@@ -96,13 +96,9 @@ Actor* playerActor = nullptr;
 
 
 
-// TODO: Currently unused
 /* Stores the states created by the client at each fixed update.
- * Used with incoming states from the server to compare for discrepencies
- */
+ * Used with incoming states from the server to compare for discrepencies */
 CircularBuffer stateBuffer;
-
-
 
 // -- Time -- //
 float deltaTime = 0.f;
@@ -175,8 +171,6 @@ int main()
 			}
 		}
 	}
-
-
 
 
 	// ---------- OpenGL ---------- //
@@ -253,7 +247,7 @@ int main()
 		shader.setMat4("projection", projection);
 		for (auto iter = actorMap.begin(); iter != actorMap.end(); ++iter)
 		{
-			iter->second->Draw(shader);
+			iter->second->Draw(shader); // Actor handles setting the position offset for shader
 		}
 
 
@@ -263,16 +257,15 @@ int main()
 			elapsedTimeSinceUpdate -= updatePeriod;
 			stateSequenceId++;
 
-			std::cout << stateSequenceId << std::endl;
-			// std::cout << movementDir.toString() << std::endl;
-
 			if (!playerActor) continue; // BUG: Remove this to see bug
-			// TODO: AAAA
-			Vector3D REMOVE_THIS = playerActor->getMoveDirection();
-			char sendBuffer[sizeof(Vector3D) + 1]{ 0 }; // Schema: movement input, other keyboard like quitting or shooting
-			sendBuffer[0] = 'r'; // 'r' --> actor replication
-			memcpy(sendBuffer + 1, &REMOVE_THIS, sizeof(Vector3D)); // TODO: This should be fixed when actor data and size are properly serialized
-			sock.sendData(sendBuffer, sizeof(Vector3D) + 1, serverAddr);
+
+			// std::cout << stateSequenceId << std::endl;
+			// std::cout << playerActor->getMoveDirection().toString() << std::endl;
+
+			char sendBuffer[1 + sizeof(ActorNetData)]{0};
+			sendBuffer[0] = 'r';
+			Actor::serialize(sendBuffer + 1, playerActor);
+			sock.sendData(sendBuffer, 1 + sizeof(ActorNetData), serverAddr);
 		}
 
 		// TODO: Might be better to remove the duplicate checks that empty the socket buffer
@@ -357,7 +350,7 @@ void moveActors(float deltaTime)
 {
 	for (auto iter = actorMap.begin(); iter != actorMap.end(); iter++)
 	{
-		iter->second->setPosition(iter->second->getMoveDirection() * iter->second->getMoveSpeed() * deltaTime);
+		iter->second->addToPosition(iter->second->getMoveDirection() * iter->second->getMoveSpeed() * deltaTime);
 	}
 }
 
@@ -370,7 +363,7 @@ void handleServerMessage(char* buffer, unsigned int bufferLen)
 		{
 			std::cout << "Successfully connected\n";
 			bIsConnectedToServer = true;
-			stateSequenceId = *(unsigned int*)(buffer + 1);
+			stateSequenceId = *(unsigned int*)(buffer + 1); // NOTE: This can cause issues if memory isn't correctly alligned
 			std::cout << "Received Simulation Step: " << stateSequenceId << std::endl;
 			stateSequenceId += 5; // TODO: Hardcoded solution to getting the client ahead. Should later be replaced with a more elegent solution
 			break;
@@ -434,36 +427,28 @@ void fixedUpdateActors(char* buffer, int bufferLen)
 	Actor* actor;
 	for (unsigned int i = 0; i < numActorsReceived; i++)
 	{
-		unsigned int id;
-		Vector3D position;
-		Vector3D rotation;
-		memcpy(&id, buffer, sizeof(unsigned int));
-		memcpy(&position, buffer + sizeof(unsigned int), sizeof(Vector3D));
-		memcpy(&rotation, buffer + sizeof(unsigned int) + sizeof(Vector3D), sizeof(Vector3D));
+		ActorNetData netData;
+		memcpy(&netData, buffer, sizeof(netData));
 
 		// std::cout << id << " / " << position.toString() << std::endl;
 
 		// -- New Actor Encountered -- //
-		if (actorMap.count(id) == 0) 
+		if (actorMap.count(netData.id) == 0) 
 		{
 			// -- Add actor to map -- //
-			actor = Actor::createActorFromBlueprint('\x0', position, rotation, id, true);
+			actor = Actor::createActorFromBlueprint(ABP_GEAR, netData.Position, netData.Rotation, netData.id, true);
 			//actor = new Actor(position, rotation, id);
 			// actor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx");
-			actorMap[id] = actor;
+			actorMap[netData.id] = actor;
 		}
 		else // -- Actor found. Updating Actor data -- //
 		{
-			actor = actorMap[id];
-			if (actor->getPosition() != position)
-			{
-				printf("Client::main/reading_actors -- Receiving Replication\n");
-			}
-			actor->setPosition(position);
-			actor->setRotation(rotation);
+			actor = actorMap[netData.id];
+			actor->setPosition(netData.Position);
+			actor->setRotation(netData.Rotation);
 		}
 
-		if (id == playerActorID && actor != playerActor)
+		if (netData.id == playerActorID && actor != playerActor)
 		{
 			printf("Client::fixedUpdateActors -- Updating playerActor\n");
 			playerActor = actor;
