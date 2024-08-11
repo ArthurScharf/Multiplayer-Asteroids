@@ -19,25 +19,29 @@ void Actor::loadModelCache()
 }
 
 
-Actor* Actor::createActorFromBlueprint(char blueprintId, Vector3D& position, Vector3D& rotation, unsigned int replicatedId, bool bClient)
+Actor* Actor::createActorFromBlueprint(char blueprintId, Vector3D position, Vector3D rotation, unsigned int replicatedId, bool bClient)
 {
 	std::string path = "";
 	float moveSpeed;
+	Vector3D moveDirection;
+
 	switch (blueprintId)
 	{
 		case ABP_GEAR: // 0 --> Gear
 		{
 			path = "C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx";
 			moveSpeed = 70.f; // Character movespeed
+			moveDirection.zero();
 			break;
 		}
-		case ABP_CHAIR: // 1 --> Chair
+		case ABP_PROJECTILE: // 1 --> Projectile
 		{
 			path = "C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/chair/chair.fbx";
 			moveSpeed = 120.f; // projectile movespeed
+			moveDirection = rotation;
 			break;
 		}
-		default: // Models don't need to be loaded if the server is invoking this method.
+		default:
 		{
 			break;
 		}
@@ -45,6 +49,7 @@ Actor* Actor::createActorFromBlueprint(char blueprintId, Vector3D& position, Vec
 
 	Actor* actor = (bClient) ? new Actor(position, rotation, replicatedId) : new Actor(position, rotation);
 	actor->setMoveSpeed(moveSpeed);
+	actor->setMoveDirection(moveDirection);
 	if (bClient && path != "")
 	{
 		Model* temp = new Model(path);
@@ -54,10 +59,12 @@ Actor* Actor::createActorFromBlueprint(char blueprintId, Vector3D& position, Vec
 }
 
 
-
-
-
-
+Actor* Actor::netDataToActor(ActorNetData data)
+{
+	Actor* actor = new Actor(data.Position, data.Rotation, data.id);
+	actor->setMoveDirection(data.moveDirection);
+	return actor;
+}
 
 Actor::Actor(Vector3D& position, Vector3D& rotation)
 	: Position(position), Rotation(rotation), id(nextId++), moveDirection(0.f), moveSpeed(0.f)

@@ -40,7 +40,8 @@ struct IpAddress
 
 
 
-float updatePeriod = 1.f / 20.f; // Verbose to allow easy editing. Should be properly declared later // 20.f
+
+float updatePeriod = 1.f / 4.f; // Verbose to allow easy editing. Should be properly declared later // 20.f
 float deltaTime = 0.f;
 
 unsigned int stateSequenceId = 0;
@@ -53,6 +54,14 @@ unsigned int numClients = 0;
 
 Actor* actors[MAX_ACTORS]{}; // Actors created and replicated
 unsigned int numActors = 0;
+
+
+/*
+* KEY: Simulation step each set of actors are to begin being simulated
+* VALUE: Set of actors to be simulated upon reaching the correct simulation step
+*/
+std::map<unsigned int, std::set<Actor*>> preSpawnedActors;
+
 
 
 /*
@@ -116,9 +125,7 @@ int main()
 			if (iter->second == nullptr)
 			{
 				// TODO: Properly choose a position for each client actor
-				Vector3D position(0.f);
-				Vector3D rotation(0.f);
-				iter->second = Actor::createActorFromBlueprint('\x0', position, rotation, 0, false);
+				iter->second = Actor::createActorFromBlueprint('\x0', Vector3D(0.f), Vector3D(0.f), 0, false);
 				actors[numActors] = iter->second;
 				numActors++;
 				//iter->second = createActor(position, rotation);
@@ -193,6 +200,29 @@ int main()
 					actor->setPosition(actor->getPosition() + (actor->getMoveSpeed() * netData.moveDirection * updatePeriod));
 					break;
 				}
+				case 's': // Client spawned an actor.
+				{
+					std::cout << "Server / Receiving Data / s ...\n";
+
+					// -- Deformatting data & Spawning Actor -- // 
+					NetworkSpawnData data;
+					memcpy(&data, recvBuffer, sizeof(NetworkSpawnData));
+					
+					Actor* projectile = Actor::createActorFromBlueprint(ABP_PROJECTILE, Vector3D(0.f), Vector3D(1.f, 0.f, 0.f), 0, false);
+					data.networkedActorID = projectile->getId();
+
+					std::cout << projectile->toString() << std::endl;
+
+					actors[numActors] = projectile;
+					numActors++;
+					// preSpawnedActors[data.simulationStep].insert(projectile); // Creates new element if it doesn't already exist
+
+					// -- Sending Reply to Client -- //
+					char replyBuffer[sizeof(NetworkSpawnData)];
+					sock.sendData(replyBuffer, sizeof(NetworkSpawnData), clientAddr);
+
+					break;
+				}
 				case 't': // Case used for testing. Should not be in the final build
 				{
 					if (bTesting)
@@ -209,13 +239,21 @@ int main()
 
 
 		// -- Sending Data: Actor Replication -- //
-		if (elapsedTimeSinceUpdate >= updatePeriod) // ~20 times a second       
+		if (elapsedTimeSinceUpdate >= updatePeriod) // ~20 times a second
 		{
 			elapsedTimeSinceUpdate -= updatePeriod;
 			stateSequenceId++;
 
 			if (numClients <= 0) continue;
+
+
+			//// -- Moving pre-spawned actors to main actor collection -- //
+			//auto iter = preSpawnedActors.find(stateSequenceId);
+			//if (iter != preSpawnedActors.end())
+			//{ // Actors that must be moved exist
+			//}
 	
+
 			// - Packing actor data - //
 			sendBuffer[0] = 'r'; // 'r' --> actor replication message
 			char* tempBuffer = sendBuffer;

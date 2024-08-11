@@ -21,7 +21,7 @@
 //	ABP_CHAIR
 //};
 #define ABP_GEAR '\x0'
-#define ABP_CHAIR '\x1'
+#define ABP_PROJECTILE '\x1'
 
 
 /*
@@ -30,16 +30,22 @@
 */
 struct ActorNetData
 {
-	const unsigned int id;
+	unsigned int id;
+	// char actorBlueprintType;
 	Vector3D Position;
 	Vector3D Rotation; // Should be a rotator. For now, is a Vector3D
 	Vector3D moveDirection; // Normalized vector choosing which direction this actor moves
-
-	ActorNetData()
-		: id(0), Position(0.f), Rotation(0.f), moveDirection(0.f)
-	{}
 };
 
+
+/*
+* Used by client and server to link unlinked proxies with their authoritative counterparts
+*/
+struct proxyLinkPackage
+{
+	unsigned int proxyLinkID;
+	unsigned int actorNetworkID; 
+};
 
 
 /*
@@ -61,11 +67,18 @@ private:
 public:
 	// Should be called before constructing any using create actor from blueprint method.
 	static void loadModelCache(); 
-	static Actor* createActorFromBlueprint(char blueprintId, Vector3D& position, Vector3D& rotation, unsigned int replicatedId, bool bClient = false); 
+
+	/*
+	* TODO:
+	* Client doesn't always replicate id. this function makes it unclear when it should be called
+	*/
+	static Actor* createActorFromBlueprint(char blueprintId, Vector3D position, Vector3D rotation, unsigned int replicatedId, bool bClient = false); 
+	static Actor* netDataToActor(ActorNetData data);
+
 
 // -- Members -- //
 private:
-	const unsigned int id;
+	unsigned int id; // prefix const
 	Vector3D Position;
 	Vector3D Rotation; // Should be a rotator. For now, is a Vector3D
 	Vector3D moveDirection; // Normalized vector choosing which direction this actor moves
@@ -103,6 +116,8 @@ public:
 // --  Getters and Setters -- //
 public:
 	unsigned int getId() { return id; }
+	// WARNING: Should only ever be called by Client when linking proxies
+	void setId(unsigned int _id) { id = _id; } 
 
 	Vector3D getPosition() { return Position; }
 	void setPosition(Vector3D position) { Position = position; }
@@ -122,4 +137,18 @@ public:
 		_moveDirection.Normalize();
 		moveDirection = _moveDirection; 
 	}
+
+// -- Operators -- //
+	bool operator==(Actor* other)
+	{
+		// NOTE: This is the same data as NetActorData
+		return id == other->id && \
+			Position == other->Position && \
+			Rotation == other->Rotation && \
+			moveDirection == other->moveDirection;
+	}
 };
+
+
+
+

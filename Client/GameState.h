@@ -7,25 +7,55 @@ class GameState
 private:
 	// Used to sequence incoming states
 	unsigned int sequenceId;
-	// Backing array
-	Actor* actors[MAX_ACTORS];
-	unsigned int numActors; 
+	// Backing vector
+	std::vector<Actor*> actors;
 
 
 public:
+	GameState(unsigned int _sequenceId, std::vector<Actor*> _actors)
+		: sequenceId(_sequenceId), actors(_actors)
+	{};
+
+
 	/*
-	* Deserializes the state number and actors and sets its members using this data
+	* Checks for true equality between this state and the other.
 	*/
-	GameState(unsigned int _sequenceId, Actor* _actors[MAX_ACTORS])
-		: sequenceId(_sequenceId), numActors(0)
-	{	
-		for (int i = 0; i < MAX_ACTORS && _actors[i] != nullptr; i++)
+	bool IsEqual(GameState* other)
+	{
+		if (actors.size() != other->actors.size()) 
+			return false;
+
+		bool result = true;
+		result &= sequenceId == other->sequenceId;
+
+
+		// -- Sorting this -- //
+		std::sort(
+			actors.begin(),
+			actors.end(),
+			[](Actor* a, Actor* b)
+			{
+				return a->getId() > b->getId();
+			}
+		);
+
+		// -- Sorting Other -- //
+		std::sort(
+			other->actors.begin(),
+			other->actors.end(),
+			[](Actor* a, Actor* b)
+			{
+				return a->getId() > b->getId();
+			}
+		);
+
+		for (int i = 0; i < actors.size(); i++)
 		{
-			actors[i] = (Actor*)malloc(sizeof(Actor*));
-			actors[i] = _actors[i];
-			numActors++;
+			result &= actors[i] == other->actors[i];
 		}
-	};
+		return result;
+	}
+
 
 
 	// -- Utility Functions & Operators -- //

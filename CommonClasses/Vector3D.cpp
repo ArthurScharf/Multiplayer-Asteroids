@@ -34,3 +34,8 @@ void Vector3D::Normalize()
 	}
 }
 
+
+void Vector3D::zero()
+{
+	x = y = z = 0.f;
+}

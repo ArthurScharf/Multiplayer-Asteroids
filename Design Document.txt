@@ -321,22 +321,112 @@ NOTE: Two collections of actors. normal actors and unpairedNetworkProxies.
       unpairedNetworkProxies is a true subset of actors
 
 
-
-
-
 NOTE: blueprint ID's are char*s because we definitely won't need more than 256 blueprints
 
 
 
 
+---- Relationship Between Spawning Actors on the client and state comparing ----
+Actor creation & State comparison both occur in FixedUpdate_Actors
+FixedUpdate_Actors occurs when a message is received from the server
+message handling occurs each frame. This is ok because the server only sends a fixed update each frame
+
+
+HYPOTHESIS: When a client connects, it will receive the packet containing it's controlled actor after several frames. This
+	    is why the client state can mismatch the server state with the same ID.
+
+
+The client is ahead of the server. This means that it will generate a frame that SHOULD have actor x in it, but won't know this until
+it compares to the servers frame it receives.
+
+
+
+---- Client Spawns Actor ----
+PROBLEM: Client needs simulate spawned actor right away. Can't wait for server to send actor back
+SOLUTION: client spawns proxy that eventually uses a matching ID to link itself with the server copy
+
+
+---- Server Spawns Actor ----
+Problem 1: Client knows about replicated action before reply
+	Client connects, sending connection request. 
+	Server replies with controlled actor ID.
+	All of this is now stored in some frame N.
+	Client is ahead of server. Client stores state for N+n which will not have it's spawned actor being alive.
+
+SOLUTION: When actor connections, create an actor locally and wait for client to link it. This might be a good idea in general.
+	  Will also solve projectile's needing to be spawned immediately issue.
+
+
+Problem 2: Client doesn't know about replicated action before reply
+	Client 1 requests that an actor is spawned. 
+	Client 2 doesn't know about it so it can't create an unlinked proxy.
+	Client 2 will not have the actor spawned by Client 1 in it's State N+n. Creates a discrepancy
 
 
 
 
 
 
-Pool at dooly's (not Katie's doolys)
-Art Museum
-Escape rooms
-Shopping
-Dinner at Comedy Club
+---- Problem 1 ----
+The client is ahead, in time, of the server. This is so because we want the server to process client requests associated with some timestep N, but
+it takes time for a message to be sent from the client to the server. Thus, we must have the client send states that are far enough ahead of the 
+server so that by the time those message reach the server, the server still has yet to process that timestep
+
+The problem comes down to responsive spawning of actors. The player must experience an action as quickly as possible when they give input.
+Thus, we can't wait for a reply from the server containing the reply to the original message to have it effect the client simulation.
+
+Additionally, Each timestep, the client and server both save a game state. If the client requests a spawned actor for timestep N, but must wait
+for server to reply with the actor, the client will store a snapshot of its simulation that lacks the actor that is to be spawned on that timestep.
+This will always result in a discrepancy between client and server.
+
+Solution: We must spawn an `Linkable-Proxy` on the client for the timestep that the spawn is requested. This proxy is a normal actor, 
+          and waits to be associated with a net id.
+          By doing this, we get immediate feedback for the client AND we save a state correctly, that will be updated correctly later on
+
+
+
+
+
+----------  Linkable-Proxies ----------
+----- IDEAS -----
+Store `proxyLinkId` in ActorNetData
+ + Easy to handle
+ - extra sending overhead
+
+
+PROBLEM: How do I choose proxyLinkId?
+SOLUTION: When We create proxy on client, have client choose arbitrary ID. Server replies with 
+
+
+
+PROCESS:
+  Spawn clientActor. set client actors unlinkedID.
+	NOTE: Use a struct here so we can expand upon this system later on to include position and rotation or other things
+  client -- (unlinkedID, state sequence id spawned in) --> Server
+  Server spawns actor on correct frame
+  Sends linked actor ID's BEFORE sending normal actor replication so client can link.
+
+
+
+
+
+
+----------  Linkable-Proxies 2.0 ----------
+Linking ID's is correct, but waiting to create the corresponding actor objects until the correct frame 
+requires we store a needlessly complicated relation, and back load linking messages to each client.
+
+Instead, when the message is received, we'll just create the actor and reply immediately.
+
+The actor will be stored with the simulation step is was created for. When the server reaches that step,
+it simply adds all the actors with this step to the normal actor pool.
+
+-- Issues -- 
+What happens if reply isn't received before actor is injected into normal actor pool? Client will perpetually believe it is out of synch.
+dummy projectile will self simulate and will never be bound.
+
+When can this happen?
+ If packets are dropped
+ If the round trip isn't fast enough.
+  
+
+

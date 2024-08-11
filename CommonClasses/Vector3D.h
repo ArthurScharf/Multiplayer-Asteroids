@@ -25,6 +25,9 @@ public:
 	*/
 	void Normalize();
 
+	/* Zeros the vector */
+	void zero(); 
+
 	std::string toString()
 	{
 		char buffer[50]{};

@@ -1,0 +1,12 @@
+---- Game State ----
+
+1. Waiting for player to connect
+2. Timer starts upon first player connecting. Once timer elapses, game begins
+3. Game Begins
+4. Game loop
+	- between 1-4 players are alive at any given time. 
+	- Scoring & Timing is occurring
+	- Game difficulty is increasing somehow
+	- Respawn Timers are active. Players can respawn
+5. All players are dead
+6. Score is displayed and clients are disconnected

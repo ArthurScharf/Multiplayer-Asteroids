@@ -85,9 +85,11 @@ bool bIsConnectedToServer = false;
 */
 
 
- 
-// key : actor network ID
-// value:  actor
+
+/*
+KEY   : Actor Network ID
+VAlUE : The corresponding actor
+*/
 std::map<unsigned int, Actor*> actorMap;
 // Stores network ID for actor this client is controlling. Necessary bc a client can be connected without an actor
 unsigned int playerActorID = -1;
@@ -96,29 +98,51 @@ Actor* playerActor = nullptr;
 
 
 
+
+bool bFireButtonPressed = false;
+
+
+
+unsigned int nextProxyLinkID = 0;
+// Key: proxyLinkID / Value: Proxy
+std::map<unsigned int, Actor*> unlinkedProxies;
+
+
+
+
+
+
 /* Stores the states created by the client at each fixed update.
  * Used with incoming states from the server to compare for discrepencies */
 CircularBuffer stateBuffer;
 
+
+
+
+
+
 // -- Time -- //
 float deltaTime = 0.f;
 float lastFrame = 0.f;
-float updatePeriod = 1.f / 20.f; // Verbose to allow easy editing. Should be properly declared later 20.f
+float updatePeriod = 1.f / 4.f; // Verbose to allow easy editing. Should be properly declared later 20.f
 float elapsedTimeSinceUpdate = 0.f;
 unsigned int stateSequenceId = 0;
+
+
 
 
 const std::string gearFBX_path = "C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx";
 
 
+
+
 // -- Forward Declaring Functions -- //
 void processInput(GLFWwindow* window);
+void spawnProjectile();
 void moveActors(float deltaTime); // Moves the actors locally. Lower priority actor update than the fixed updates
-void fixedUpdateActors(char* buffer, int bufferLen);
+void fixedUpdate_Actors(char* buffer, int bufferLen);
 void handleServerMessage(char* buffer, unsigned int bufferLen);
 void terminateProgram();
-
-
 
 
 
@@ -208,17 +232,13 @@ int main()
 
 
 	// BUG: The block below should be first in main. Haven't fixed the bug that allows it to be so
-
 	// ---------- Initializing ---------- //
 	Actor::loadModelCache(); // Initializes model cache so blueprinted actors can be created
-
-
 
 
 	// ---------- Main loop ---------- //
 	while (!glfwWindowShouldClose(window))
 	{
-
 		// ---- Per-frame logic ---- //
 		float currentFrame = static_cast<float>(glfwGetTime());
 		deltaTime = currentFrame - lastFrame;
@@ -249,6 +269,10 @@ int main()
 		{
 			iter->second->Draw(shader); // Actor handles setting the position offset for shader
 		}
+		for (auto iter = unlinkedProxies.begin(); iter != unlinkedProxies.end(); iter++)
+		{
+			iter->second->Draw(shader);
+		}
 
 
 		// ---- Fixed Update ---- //
@@ -257,16 +281,26 @@ int main()
 			elapsedTimeSinceUpdate -= updatePeriod;
 			stateSequenceId++;
 
-			if (!playerActor) continue; // BUG: Remove this to see bug
+			// std::cout << "Handling State " << stateSequenceId << std::endl;
 
-			// std::cout << stateSequenceId << std::endl;
-			// std::cout << playerActor->getMoveDirection().toString() << std::endl;
+			// -- Creating New State -- //
+			std::vector<Actor*> actors;
+			for (auto iter = actorMap.begin(); iter != actorMap.end(); iter++)
+			{
+				actors.push_back(iter->second);
+			}
+			GameState* gameState = new GameState(stateSequenceId, actors);
+			stateBuffer.append(gameState);
+
+			if (!playerActor) continue; // BUG: Remove this to see bug
 
 			char sendBuffer[1 + sizeof(ActorNetData)]{0};
 			sendBuffer[0] = 'r';
 			Actor::serialize(sendBuffer + 1, playerActor);
 			sock.sendData(sendBuffer, 1 + sizeof(ActorNetData), serverAddr);
-		}
+		}//~ Fixed Update
+
+
 
 		// TODO: Might be better to remove the duplicate checks that empty the socket buffer
 		// ----  Receiving Data from Server ----  // Receives data from server regardless of state.
@@ -315,7 +349,8 @@ void processInput(GLFWwindow* window)
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, true);
 	if (playerActor == nullptr) return; 
-
+	
+	// -- Movement -- //
 	Vector3D moveDirection(0.f);
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 	{
@@ -343,12 +378,64 @@ void processInput(GLFWwindow* window)
 	}
 	moveDirection.Normalize();
 	playerActor->setMoveDirection(moveDirection);
+
+
+	// -- Actions -- //
+	if (glfwGetKey(window, GLFW_KEY_J) == GLFW_PRESS)
+	{
+		if (!bFireButtonPressed)
+		{
+			spawnProjectile();
+			bFireButtonPressed = true;
+		}
+	}
+	else if (glfwGetKey(window, GLFW_KEY_J) == GLFW_RELEASE)
+	{
+		bFireButtonPressed = false;
+	}
+}
+
+
+// Could be generalized to any type of spawned actor. May do this later
+void spawnProjectile()
+{
+	if (!playerActor) return;
+
+	std::cout << "Client::spawnProjectile" << std::endl;
+
+	// ---- Constructing Unlinked Proxy ---- //
+	Actor* projectile = Actor::createActorFromBlueprint(
+		ABP_PROJECTILE, 
+		Vector3D(playerActor->getPosition() + playerActor->getRotation() * 100.f),
+		Vector3D(1.f, 0.f, 0.f),
+		1000, 
+		true
+	);
+	unlinkedProxies.insert({nextProxyLinkID, projectile});
+
+	std::cout << projectile->toString() << std::endl;
+
+	// ---- Sending data to server ---- //
+	char buffer[sizeof(NetworkSpawnData)];
+	NetworkSpawnData data;
+	data.dummyActorID = nextProxyLinkID++;
+	data.simulationStep = stateSequenceId;
+	data.networkedActorID = 0;
+	memcpy(buffer, &data, sizeof(NetworkSpawnData));
+	sock.sendData(buffer, 1 + sizeof(NetworkSpawnData), serverAddr);
 }
 
 
 void moveActors(float deltaTime)
 {
+	// ---- Moving Actors ---- //
 	for (auto iter = actorMap.begin(); iter != actorMap.end(); iter++)
+	{
+		iter->second->addToPosition(iter->second->getMoveDirection() * iter->second->getMoveSpeed() * deltaTime);
+	}
+
+	// ---- Moving Unlinked Proxies ---- //
+	for (auto iter = unlinkedProxies.begin(); iter != unlinkedProxies.end(); iter++)
 	{
 		iter->second->addToPosition(iter->second->getMoveDirection() * iter->second->getMoveSpeed() * deltaTime);
 	}
@@ -373,13 +460,32 @@ void handleServerMessage(char* buffer, unsigned int bufferLen)
 			/* Updates actor states to match server data.
 			*  Spawns actors that were sent to client, but don't yet exist
 			*/
-			fixedUpdateActors(++buffer, --bufferLen);
+			fixedUpdate_Actors(++buffer, --bufferLen);
 			break;
 		}
 		case 'i':	// Receiving Controlled Actor ID
 		{
 			memcpy(&playerActorID, ++buffer, sizeof(unsigned int));
 			std::cout << "Receiving playerActorID: " << playerActorID << std::endl;
+			break;
+		}
+		case 's':
+		{
+			std::cout << "Client::handleServerMessage / s -- ";
+
+			/* Reply to Spawn Request
+			*  Links locally spawned dummy with authoritative server copy
+			*/
+			NetworkSpawnData data;
+			memcpy(&data, buffer, sizeof(NetworkSpawnData));
+
+			unlinkedProxies[data.dummyActorID]->setId(data.networkedActorID);
+			actorMap[data.networkedActorID] = unlinkedProxies[data.dummyActorID];
+
+			std::cout << actorMap[data.networkedActorID]->toString() << std::endl;
+
+			unlinkedProxies.erase(data.dummyActorID);
+
 			break;
 		}
 		case 't':
@@ -394,7 +500,7 @@ void handleServerMessage(char* buffer, unsigned int bufferLen)
 }
 
 
-void fixedUpdateActors(char* buffer, int bufferLen)
+void fixedUpdate_Actors(char* buffer, int bufferLen)
 {
 	// TODO: Actor's must have a mesh instantiated when they're created. Data sent across must indicate the type of actor
 	//       Alternatively, we send spawn and destroy messages, which contain all the required actor data, including the type of actor
@@ -414,31 +520,32 @@ void fixedUpdateActors(char* buffer, int bufferLen)
 		numActorsReceived = (int)floor(check);
 	if (numActorsReceived == -1)
 	{
-		std::cout << "Client::fixedUpdateActors -- length of buffer not wholly divisible by sizeof(Actor)\n";
+		std::cout << "Client::fixedUpdate_Actors -- length of buffer not wholly divisible by sizeof(Actor)\n";
 		return;
 	}
+
 
 	// -- Creating and Copying to stateSequenceId -- //
 	unsigned int stateSequenceId = -1;
 	memcpy(&stateSequenceId, buffer, sizeof(unsigned int));
 	buffer += sizeof(unsigned int);
 
+
 	// -- Reading Actors -- //
 	Actor* actor;
+	std::vector<Actor*> recvActors;
 	for (unsigned int i = 0; i < numActorsReceived; i++)
 	{
 		ActorNetData netData;
 		memcpy(&netData, buffer, sizeof(netData));
 
-		// std::cout << id << " / " << position.toString() << std::endl;
-
+		recvActors.push_back(Actor::netDataToActor(netData));
+		
 		// -- New Actor Encountered -- //
-		if (actorMap.count(netData.id) == 0) 
+		if (actorMap.count(netData.id) == 0)
 		{
 			// -- Add actor to map -- //
 			actor = Actor::createActorFromBlueprint(ABP_GEAR, netData.Position, netData.Rotation, netData.id, true);
-			//actor = new Actor(position, rotation, id);
-			// actor->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx");
 			actorMap[netData.id] = actor;
 		}
 		else // -- Actor found. Updating Actor data -- //
@@ -450,11 +557,36 @@ void fixedUpdateActors(char* buffer, int bufferLen)
 
 		if (netData.id == playerActorID && actor != playerActor)
 		{
-			printf("Client::fixedUpdateActors -- Updating playerActor\n");
+			printf("Client::fixedUpdate_Actors -- Updating playerActor\n");
 			playerActor = actor;
 		}
 		buffer += sizeof(Actor);
 	}
+
+
+	// -- Creating State and Checking for equality -- //
+	GameState* state = new GameState(stateSequenceId, recvActors);
+	GameState* clientState = stateBuffer.getStateBySequenceId(stateSequenceId);
+	if (!clientState)
+	{
+		std::cout << "fixedUpdate_Actors -- !clientState" << std::endl;
+	}
+
+
+	if ((clientState == state) == false)
+	{
+		// std::cout << "fixedUpdate_Actors -- Not equivalent" << std::endl;
+	}
+	
+
+	return;
+
+
+	if (!stateBuffer.contains(state))
+	{
+		// TODO: Reconcile
+	}
+	delete state;
 }
 
 

@@ -11,8 +11,10 @@
 --------------------------------
 ---------- Start Here ----------
 --------------------------------
+[ ] createActorFromBlueprint doesn't cover make itself clear how it should be used. There are times where a client would like to not
+    assign a network id but will still want other features associated with calling bIsClint = true
 
-
+[ ] Modify ActorNetData and client spawning to allow for blueprint type to matter
 
 
 
@@ -36,15 +38,24 @@
 [x] Update Server code for moving actors. Replicated movement from clients should set their actor's moveDir, not move that actor directly.
     This way, all actors are moved using some moveActor method. Better encapsulation
 
-
 [x] extra data is being sent over the network each frame because sizeof(Actor) is being used where actor has
     several data members that don't need to be serialized. This should be fixed
 	- Fixed by using ActorNetData struct. Sometimes extra data is sent, but makes the program safer
 
-[ ] Client stores it's own snapshots and compares to the ones received from server when they're received
+( ) How does actor creation fit with the comparison of states?
 
+[ ] Client stores it's own snapshots and compares to the ones received from server when they're received
+	[ ] Client Creates and stores GameStates
+	[ ] Client properly unpacks Gamestates from server
+	[ ] Greater Consideration must be placed into what constitutes a bad comparison between states
+
+[ ] Client Reconciliation
 
 [ ] Handling Actions that will often occur several times between fixed updates
+
+[ ] Handle case where stateSequenceID's could exceed maximum value. ie. we need to wrap
+
+
 
 
 

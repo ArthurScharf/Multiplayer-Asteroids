@@ -39,6 +39,25 @@ public:
 		}
 	};
 
+	bool contains(GameState* state)
+	{
+		for (int i = 0; i < (bIsFull ? MAX_STATES : index); i++)
+		{
+			if (states[i] == state) return true;
+		}
+		return false;
+	}
+
+	GameState* getStateBySequenceId(unsigned int sequenceId)
+	{
+		for (int i = 0; i < (bIsFull ? MAX_STATES : index); i++)
+		{
+			if (states[i]->getSequenceId() == sequenceId)
+				return states[i];
+		}
+		return nullptr;
+	}
+
 
 #if _DEBUG
 	std::string toString()
