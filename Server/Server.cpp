@@ -41,7 +41,7 @@ struct IpAddress
 
 
 
-float updatePeriod = 1.f / 4.f; // Verbose to allow easy editing. Should be properly declared later // 20.f
+float updatePeriod = 1.f / 20.f; // Verbose to allow easy editing. Should be properly declared later // 20.f
 float deltaTime = 0.f;
 
 unsigned int stateSequenceId = 0;
@@ -75,7 +75,7 @@ Actor* createActor(Vector3D& pos, Vector3D& rot);
 *  removes the created actor from actors
 */
 // TODO: Implement Destroy Actor
-
+void moveActors(float deltaTime);
 
 
 // ---- SERVER ---- //
@@ -106,18 +106,18 @@ int main()
 	float elapsedTimeSinceUpdate = 0.f;
 	while (true)
 	{
-
 		// -- Time Management -- //	
 		end = start;
 		start = std::chrono::high_resolution_clock::now();
 		deltaTime = (start - end).count() / 1000000000.f;	// nanoseconds to seconds
 		elapsedTimeSinceUpdate += deltaTime;
 
+		// -- Updating Actors -- //
+		moveActors(deltaTime);
 
-
-		// BUG: There are two actors being created when we create an actor here
 		
 		// -- Checking for spawn/respawn of player characters -- //
+		// BUG: There are two actors being created when we create an actor here
 		auto iter = clients.begin();
 		while (iter != clients.end())
 		{
@@ -152,15 +152,14 @@ int main()
 		}
 
 
-		// -- Receiving Data -- //
+		// -- Handling Client Messages -- //
 		int numBytesRead;
 		char* recvBuffer = sock.recvData(numBytesRead, clientAddr);
 		if (numBytesRead > 0) // Received Anything?
 		{
 			switch (recvBuffer[0]) // Instruction Received
 			{
-				// connect. Client wants to be added to list of connected clients
-				case 'c':
+				case 'c': // Connect. Client wants to be added to list of connected clients
 				{
 					std::cout << "client connected\n"; // TODO: print client IP address
 					// - Storing client ip address - //
@@ -178,7 +177,7 @@ int main()
 					sock.sendData(sendBuffer, 1 + sizeof(unsigned int), clientAddr);
 					break;
 				}
-				case 'r':
+				case 'r': // Client sending actor movement update
 				{
 					// Receives client inputs and uses them to update the state of that client's playerActor
 					// TODO: Handle rotation and action inputs like quitting or shooting
@@ -197,7 +196,7 @@ int main()
 					ActorNetData netData;
 					memcpy(&netData, recvBuffer + 1, sizeof(netData));
 					Actor* actor = clients[ipAddr];
-					actor->setPosition(actor->getPosition() + (actor->getMoveSpeed() * netData.moveDirection * updatePeriod));
+					actor->setMoveDirection(netData.moveDirection);
 					break;
 				}
 				case 's': // Client spawned an actor.
@@ -208,13 +207,22 @@ int main()
 					NetworkSpawnData data;
 					memcpy(&data, recvBuffer, sizeof(NetworkSpawnData));
 					
-					Actor* projectile = Actor::createActorFromBlueprint(ABP_PROJECTILE, Vector3D(0.f), Vector3D(1.f, 0.f, 0.f), 0, false);
-					data.networkedActorID = projectile->getId();
 
-					std::cout << projectile->toString() << std::endl;
+					// TODO: temp solution to finding projetile position. May be permenant solution, but must first consider other options
+					IpAddress clientIp;
+					clientIp._in_addr = clientAddr.sin_addr;
+					Actor* clientActor = clients[clientIp];
 
+					Actor* projectile = Actor::createActorFromBlueprint(
+						ABP_PROJECTILE, 
+						clientActor->getPosition() + clientActor->getRotation() * 100.f,
+						Vector3D(1.f, 0.f, 0.f), 
+						0,
+						false
+					);
 					actors[numActors] = projectile;
 					numActors++;
+					data.networkedActorID = projectile->getId();
 					// preSpawnedActors[data.simulationStep].insert(projectile); // Creates new element if it doesn't already exist
 
 					// -- Sending Reply to Client -- //
@@ -238,22 +246,16 @@ int main()
 		}
 
 
-		// -- Sending Data: Actor Replication -- //
+		// -- Fixed Frequency Update -- //
 		if (elapsedTimeSinceUpdate >= updatePeriod) // ~20 times a second
 		{
+
 			elapsedTimeSinceUpdate -= updatePeriod;
 			stateSequenceId++;
 
+		
+			// -- Sending Snapshot to Clients -- //
 			if (numClients <= 0) continue;
-
-
-			//// -- Moving pre-spawned actors to main actor collection -- //
-			//auto iter = preSpawnedActors.find(stateSequenceId);
-			//if (iter != preSpawnedActors.end())
-			//{ // Actors that must be moved exist
-			//}
-	
-
 			// - Packing actor data - //
 			sendBuffer[0] = 'r'; // 'r' --> actor replication message
 			char* tempBuffer = sendBuffer;
@@ -298,3 +300,37 @@ Actor* createActor(Vector3D& pos, Vector3D& rot)
 }
 
 
+void moveActors(float deltaTime)
+{
+	for (unsigned int i = 0; i < numActors; i++)
+	{
+		Actor* actor = actors[i];
+		actor->addToPosition(actor->getMoveDirection() * actor->getMoveSpeed() * deltaTime);
+
+		if (actor->getId() != 0)
+			std::cout << actor->toString() << std::endl;
+
+
+
+		// TODO: Implement propery approach to limiting actor movement. Different types of actors will handle the edge of the screen 
+		// -- X-Boundary Checking -- //
+		if (actor->getPosition().x > 62.f) // I have no idea why this value is edge of the screen
+		{
+			actor->setPosition(Vector3D(62.f, actor->getPosition().y, actor->getPosition().z));
+		}
+		else if (actor->getPosition().x < -62.f)
+		{
+			actor->setPosition(Vector3D(-62.f, actor->getPosition().y, actor->getPosition().z));
+		}
+
+		// -- Y-Boundary Checking -- //
+		if (actor->getPosition().y > 50.f)
+		{
+			actor->setPosition(Vector3D(actor->getPosition().x, 50.f, actor->getPosition().z));
+		}
+		else if (actor->getPosition().y < -50.f)
+		{
+			actor->setPosition(Vector3D(actor->getPosition().x, -50.f, actor->getPosition().z));
+		}
+	}
+}

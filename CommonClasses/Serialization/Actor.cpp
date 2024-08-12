@@ -37,7 +37,8 @@ Actor* Actor::createActorFromBlueprint(char blueprintId, Vector3D position, Vect
 		case ABP_PROJECTILE: // 1 --> Projectile
 		{
 			path = "C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/chair/chair.fbx";
-			moveSpeed = 120.f; // projectile movespeed
+			//moveSpeed = 120.f; // projectile movespeed
+			moveSpeed = 1.f;
 			moveDirection = rotation;
 			break;
 		}

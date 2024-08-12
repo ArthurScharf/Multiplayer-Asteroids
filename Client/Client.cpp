@@ -124,7 +124,7 @@ CircularBuffer stateBuffer;
 // -- Time -- //
 float deltaTime = 0.f;
 float lastFrame = 0.f;
-float updatePeriod = 1.f / 4.f; // Verbose to allow easy editing. Should be properly declared later 20.f
+float updatePeriod = 1.f / 20.f; // Verbose to allow easy editing. Should be properly declared later 20.f
 float elapsedTimeSinceUpdate = 0.f;
 unsigned int stateSequenceId = 0;
 
@@ -275,7 +275,7 @@ int main()
 		}
 
 
-		// ---- Fixed Update ---- //
+		// ---- Fixed Frequency Update ---- //
 		if (elapsedTimeSinceUpdate >= updatePeriod)
 		{
 			elapsedTimeSinceUpdate -= updatePeriod;
@@ -415,12 +415,14 @@ void spawnProjectile()
 
 	std::cout << projectile->toString() << std::endl;
 
+	// return; // TESTING
+
 	// ---- Sending data to server ---- //
 	char buffer[sizeof(NetworkSpawnData)];
 	NetworkSpawnData data;
 	data.dummyActorID = nextProxyLinkID++;
 	data.simulationStep = stateSequenceId;
-	data.networkedActorID = 0;
+	data.networkedActorID = projectile->getId();
 	memcpy(buffer, &data, sizeof(NetworkSpawnData));
 	sock.sendData(buffer, 1 + sizeof(NetworkSpawnData), serverAddr);
 }
@@ -428,11 +430,40 @@ void spawnProjectile()
 
 void moveActors(float deltaTime)
 {
+	
 	// ---- Moving Actors ---- //
 	for (auto iter = actorMap.begin(); iter != actorMap.end(); iter++)
 	{
-		iter->second->addToPosition(iter->second->getMoveDirection() * iter->second->getMoveSpeed() * deltaTime);
+		Actor* actor = iter->second;
+		actor->addToPosition(actor->getMoveDirection() * actor->getMoveSpeed() * deltaTime);
+		
+		// std::cout << actor->getPosition().toString() << std::endl;
+
+		// TODO: Implement propery approach to limiting actor movement. Different types of actors will handle the edge of the screen differently
+		// -- X-boundary -- //
+		if (actor->getPosition().x > 62.f) // I have no idea why this value is edge of the screen
+		{
+			actor->setPosition(Vector3D(62.f, actor->getPosition().y, actor->getPosition().z));
+		}
+		else if (actor->getPosition().x < -62.f)
+		{
+			actor->setPosition(Vector3D(-62.f, actor->getPosition().y, actor->getPosition().z));
+		}
+
+
+		// -- Y-boundary -- //
+		if (actor->getPosition().y > 50.f)
+		{
+			actor->setPosition(Vector3D(actor->getPosition().x, 50.f, actor->getPosition().z));
+		}
+		else if (actor->getPosition().y < -50.f)
+		{
+			actor->setPosition(Vector3D(actor->getPosition().x, -50.f, actor->getPosition().z));
+		}
 	}
+
+
+	// TODO: Why do I have a separate collection for proxies? Wouldn't it make more sense to identify them some other way?
 
 	// ---- Moving Unlinked Proxies ---- //
 	for (auto iter = unlinkedProxies.begin(); iter != unlinkedProxies.end(); iter++)
@@ -502,6 +533,9 @@ void handleServerMessage(char* buffer, unsigned int bufferLen)
 
 void fixedUpdate_Actors(char* buffer, int bufferLen)
 {
+	std::cout << "Client::fixedUpdate_Actors\n";
+
+
 	// TODO: Actor's must have a mesh instantiated when they're created. Data sent across must indicate the type of actor
 	//       Alternatively, we send spawn and destroy messages, which contain all the required actor data, including the type of actor
 	/* -- Schema --

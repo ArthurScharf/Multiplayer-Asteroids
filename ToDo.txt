@@ -11,6 +11,8 @@
 --------------------------------
 ---------- Start Here ----------
 --------------------------------
+[ ] Spawned client side proxies need to not use actor ID's that conflict with those used by proper actors within the system.
+
 [ ] createActorFromBlueprint doesn't cover make itself clear how it should be used. There are times where a client would like to not
     assign a network id but will still want other features associated with calling bIsClint = true
 
@@ -54,8 +56,6 @@
 [ ] Handling Actions that will often occur several times between fixed updates
 
 [ ] Handle case where stateSequenceID's could exceed maximum value. ie. we need to wrap
-
-
 
 
 
