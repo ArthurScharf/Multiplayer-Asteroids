@@ -10,3 +10,12 @@
 	- Respawn Timers are active. Players can respawn
 5. All players are dead
 6. Score is displayed and clients are disconnected
+
+
+
+
+
+
+
+Future ID objects should also be able to be set to null. This is useful in cases like those of the proxies, where it feels dangerous
+having no option to denote that the ID should not be used

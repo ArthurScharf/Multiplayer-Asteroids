@@ -8,9 +8,19 @@
 
 
 
---------------------------------
----------- Start Here ----------
---------------------------------
+
+[ ] I don't understand how to call other constructors from within constructors. This is causing an instantiation bug, I think
+
+
+
+[ ] Find a better solution for controlling the state of the program. Problematic bug when looping to get servers current state sequence ID
+
+[ ] Server is still sending snapshots as a list of actors instead of a list of actorNetData's. This should be changed
+
+[ ] Properly compare for state's being received from server and decide on reconciliation method
+
+[ ] Multiple actors are being spawned per a call. Mega issue
+
 [ ] Spawned client side proxies need to not use actor ID's that conflict with those used by proper actors within the system.
 
 [ ] createActorFromBlueprint doesn't cover make itself clear how it should be used. There are times where a client would like to not

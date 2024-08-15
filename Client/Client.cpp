@@ -67,6 +67,10 @@ Camera camera( glm::vec3(0.f, 0.f, 100.f) ); // Camera Position
 UDPSocket sock;
 sockaddr_in serverAddr;
 bool bIsConnectedToServer = false;
+char sendBuffer[1 + (MAX_ACTORS * sizeof(Actor))];
+char* recvBuffer{};
+int numBytesRead = -1; // TODO: This might be a duplicate of another variable
+
 
 
 /* There is a playerActorID and a playerActor pointer for the following reasons
@@ -103,8 +107,8 @@ bool bFireButtonPressed = false;
 
 
 
-unsigned int nextProxyLinkID = 0;
-// Key: proxyLinkID / Value: Proxy
+unsigned int nextProxyID = 0;
+// Key: proxyID / Value: Proxy
 std::map<unsigned int, Actor*> unlinkedProxies;
 
 
@@ -126,7 +130,7 @@ float deltaTime = 0.f;
 float lastFrame = 0.f;
 float updatePeriod = 1.f / 20.f; // Verbose to allow easy editing. Should be properly declared later 20.f
 float elapsedTimeSinceUpdate = 0.f;
-unsigned int stateSequenceId = 0;
+unsigned int stateSequenceID = 0;
 
 
 
@@ -137,67 +141,23 @@ const std::string gearFBX_path = "C:/Users/User/source/repos/Multiplayer-Asteroi
 
 
 // -- Forward Declaring Functions -- //
+void initiateConnection(char* sendBuffer, char* recvBuffer, int& numBytesRead);
 void processInput(GLFWwindow* window);
 void spawnProjectile();
 void moveActors(float deltaTime); // Moves the actors locally. Lower priority actor update than the fixed updates
-void fixedUpdate_Actors(char* buffer, int bufferLen);
-void handleServerMessage(char* buffer, unsigned int bufferLen);
+void replicateState(char* buffer, int bufferLen);
+void readRecvBuffer();
+void handleMessage(char* buffer, unsigned int bufferLen);
 void terminateProgram();
 
 
 
-
-/* It is the job of the client's main code to organize and denote the structure
-*  Of the serialized data being sent. In other words, it must
-*  organize the serialized actors and instructions with the same custom protocol
-*  that the server does
-*/
-// ---- CLIENT ---- //
 int main()
 {
+	// -- Initiating Connection with Server -- //
+	initiateConnection(sendBuffer, recvBuffer, numBytesRead);
 
-
-	// ---------- Networking ---------- //
-	char sendBuffer[1 + (MAX_ACTORS * sizeof(Actor))];
-	char* recvBuffer{};
-	int numBytesRead = -1; // TODO: This might be a duplicate of another variable
-
-	// ---- Establishing Connection ---- //
-	sock.init(false);
-	/* Properly formatting received IP address string and placing it in sockaddr_in struct */
-	serverAddr.sin_family = AF_INET;
-
-	while (!bIsConnectedToServer)
-	{
-		std::cout << "Enter server IP address: ";
-		wchar_t wServerAddrStr[INET_ADDRSTRLEN];
-		std::wcin >> wServerAddrStr;
-		PCWSTR str(wServerAddrStr);
-		InetPtonW(AF_INET, str, &(serverAddr.sin_addr));
-		serverAddr.sin_port = htons(6969);
-		// -- Sending Connection Message -- //
-		// Attempt to connect several times
-		for (int i = 0; i < 4; i++)
-		{
-			sendBuffer[0] = 'c'; // Connect
-			sock.sendData(sendBuffer, 1, serverAddr);
-
-			Sleep(250); // quarter second seems reasonable
-
-			sockaddr_in _; // TODO: Code smell
-			recvBuffer = sock.recvData(numBytesRead, _);
-			if (numBytesRead > 0 && *recvBuffer == 'c')
-			{
-				bIsConnectedToServer = true;
-				stateSequenceId = *(unsigned int*)(recvBuffer + 1);
-				stateSequenceId += 5; // TODO: Arbitrary guess to get the client ahead. More elegent solution in the future
-				break;
-			}
-		}
-	}
-
-
-	// ---------- OpenGL ---------- //
+	// -- OpenGL -- //
 	glfwInit();
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -223,22 +183,50 @@ int main()
 	glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LESS); // Explicitly stating the depth function to be used
-	// Compiling GLSL Shaders 
+	
+	// Compiling GLSL Shaders
 	Shader shader(
 		"C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/GLSL Shaders/Vertex.txt",
 		"C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/GLSL Shaders/Fragment.txt"
 	);
 
-
-
-	// BUG: The block below should be first in main. Haven't fixed the bug that allows it to be so
-	// ---------- Initializing ---------- //
+	// -- Loading Models -- //
 	Actor::loadModelCache(); // Initializes model cache so blueprinted actors can be created
 
+
+	/*
+	// -- Retrieving Server's Most Recently Simulated Timestep -- //
+	for (int i = 0; i < 5; i++) // Arbitrary number of attempts
+	{
+		std::cout << "Sending MSG_TSTEP" << std::endl;
+		sendBuffer[0] = MSG_TSTEP;
+		sock.sendData(sendBuffer, 1, serverAddr);
+
+		Sleep(250); // Reasonable amount of time
+
+		readRecvBuffer();
+
+		if (stateSequenceID != 0) break;
+	}
+	// Program exiting is simple way to avoid problems. We assume that LAN will usually return 1 of 5 attempts
+	if (stateSequenceID == 0)
+	{
+		std::cout << "ERROR::main / Retrieving Server stateSequenceID -- Retrieved ID == 0" << std::endl;
+		//terminateProgram();
+	}
+	*/
+
+
+
+	/* glfwGetTime returns time since glfw was initialized. We want to only begin measure from the 
+	*  point at which the main loop began to run.
+	*/
+	lastFrame = static_cast<float>(glfwGetTime());
 
 	// ---------- Main loop ---------- //
 	while (!glfwWindowShouldClose(window))
 	{
+
 		// ---- Per-frame logic ---- //
 		float currentFrame = static_cast<float>(glfwGetTime());
 		deltaTime = currentFrame - lastFrame;
@@ -269,19 +257,27 @@ int main()
 		{
 			iter->second->Draw(shader); // Actor handles setting the position offset for shader
 		}
-		for (auto iter = unlinkedProxies.begin(); iter != unlinkedProxies.end(); iter++)
-		{
-			iter->second->Draw(shader);
-		}
+		// DEBUG: Not simulating Proxies
+		//for (auto iter = unlinkedProxies.begin(); iter != unlinkedProxies.end(); iter++)
+		//{
+		//	iter->second->Draw(shader);
+		//}
 
 
 		// ---- Fixed Frequency Update ---- //
 		if (elapsedTimeSinceUpdate >= updatePeriod)
 		{
-			elapsedTimeSinceUpdate -= updatePeriod;
-			stateSequenceId++;
+			// TESTING
+			//for (auto iter = actorMap.begin(); iter != actorMap.end(); iter++)
+			//{
+			//	std::cout << iter->second->toString() << std::endl;
+			//}
 
-			// std::cout << "Handling State " << stateSequenceId << std::endl;
+
+			elapsedTimeSinceUpdate -= updatePeriod;
+			stateSequenceID++;
+
+			// std::cout << "Fixed update " << stateSequenceID << std::endl;
 
 			// -- Creating New State -- //
 			std::vector<Actor*> actors;
@@ -289,50 +285,30 @@ int main()
 			{
 				actors.push_back(iter->second);
 			}
-			GameState* gameState = new GameState(stateSequenceId, actors);
+			GameState* gameState = new GameState(stateSequenceID, actors);
 			stateBuffer.append(gameState);
 
 			if (!playerActor) continue; // BUG: Remove this to see bug
 
 			char sendBuffer[1 + sizeof(ActorNetData)]{0};
-			sendBuffer[0] = 'r';
-			Actor::serialize(sendBuffer + 1, playerActor);
+			sendBuffer[0] = MSG_REP;
+
+			ActorNetData data = playerActor->toNetData();
+			memcpy(sendBuffer + 1, &data, sizeof(ActorNetData));
 			sock.sendData(sendBuffer, 1 + sizeof(ActorNetData), serverAddr);
+
 		}//~ Fixed Update
 
-
-
-		// TODO: Might be better to remove the duplicate checks that empty the socket buffer
-		// ----  Receiving Data from Server ----  // Receives data from server regardless of state.
-		char* tempBuffer{};
-		int recvBufferLen = 0;
-		int tempBufferLen = 0;
-		sockaddr_in recvAddr; // This is never used on purpose. Code smell
-		for (int i = 0; i < NUM_PACKETS_PER_CYCLE; i++)
-		{
-			tempBuffer = sock.recvData(tempBufferLen, recvAddr);
-			if (tempBufferLen == 0)
-			{
-				printf("client::reading packets -- read all packets");
-				break;
-			}
-			if (*tempBuffer != 'r')
-			{
-				handleServerMessage(tempBuffer, tempBufferLen);
-				continue;
-			}
-			recvBuffer = tempBuffer;
-			recvBufferLen = tempBufferLen;
-		}
-		if (recvBufferLen > 0)
-		{
-			// std::cout << "Receiving Update" << std::endl;
-			handleServerMessage(recvBuffer, recvBufferLen);
-		}
-
+		readRecvBuffer();
 		glfwPollEvents();
 		glfwSwapBuffers(window);
 	}//~ Main Loop
+
+
+
+	// TEST
+	sendBuffer[0] = MSG_EXIT;
+	sock.sendData(sendBuffer, 1, serverAddr);
 
 	terminateProgram();
 
@@ -342,6 +318,46 @@ int main()
 
 	return 0;
 };
+
+/*
+* Takes input from user for game server IP.
+* Sends connect 'c'  message then waits for reply.
+* If reply isn' received in 1/4 s, take input from user again
+*/
+void initiateConnection(char* sendBuffer, char* recvBuffer, int& numBytesRead)
+{
+	// ---- Establishing Connection ---- //
+	sock.init(false);
+	/* Properly formatting received IP address string and placing it in sockaddr_in struct */
+	serverAddr.sin_family = AF_INET;
+
+	while (!bIsConnectedToServer)
+	{
+		std::cout << "Enter server IP address: ";
+		wchar_t wServerAddrStr[INET_ADDRSTRLEN];
+		std::wcin >> wServerAddrStr;
+		PCWSTR str(wServerAddrStr);
+		InetPtonW(AF_INET, str, &(serverAddr.sin_addr));
+		serverAddr.sin_port = htons(6969);
+		// -- Sending Connection Message -- //
+		// Attempt to connect several times
+		for (int i = 0; i < 5; i++)
+		{
+			sendBuffer[0] = MSG_CONNECT; // Connect
+			sock.sendData(sendBuffer, 1, serverAddr);
+
+			Sleep(250); // quarter second seems reasonable
+
+			recvBuffer = sock.recvData(numBytesRead, serverAddr);
+
+			if (recvBuffer[0] = MSG_CONNECT)
+			{
+				bIsConnectedToServer = true;
+				break;
+			}
+		}
+	}
+}
 
 
 void processInput(GLFWwindow* window)
@@ -396,33 +412,33 @@ void processInput(GLFWwindow* window)
 }
 
 
-// Could be generalized to any type of spawned actor. May do this later
 void spawnProjectile()
 {
 	if (!playerActor) return;
 
-	std::cout << "Client::spawnProjectile" << std::endl;
+	printf("Client::spawnProjectile");
+
+	/* -- NOTE -- 
+	I didn't feel like this single case for spawning a proxy deserved it's own constructor, as this would
+	present a more confusing header for actor. Thus, I'm setting things manually here, since this process should
+	only ever be done once */
 
 	// ---- Constructing Unlinked Proxy ---- //
-	Actor* projectile = Actor::createActorFromBlueprint(
-		ABP_PROJECTILE, 
-		Vector3D(playerActor->getPosition() + playerActor->getRotation() * 100.f),
-		Vector3D(1.f, 0.f, 0.f),
-		1000, 
-		true
+	Actor* projectile = new Actor(
+		playerActor->getPosition() + (playerActor->getRotation() * 100.f),
+		playerActor->getRotation(),
+		ABI_Projectile,
+		nextProxyID
 	);
-	unlinkedProxies.insert({nextProxyLinkID, projectile});
-
-	std::cout << projectile->toString() << std::endl;
-
-	// return; // TESTING
+	projectile->setPosition(playerActor->getPosition() + (playerActor->getRotation() * 100.f));
+	unlinkedProxies.insert({ nextProxyID, projectile });
 
 	// ---- Sending data to server ---- //
 	char buffer[sizeof(NetworkSpawnData)];
 	NetworkSpawnData data;
-	data.dummyActorID = nextProxyLinkID++;
-	data.simulationStep = stateSequenceId;
-	data.networkedActorID = projectile->getId();
+	data.dummyActorID = nextProxyID++;
+	data.simulationStep = stateSequenceID;
+	data.networkedActorID = 0; // The proxy's ID doesn't matter to the server
 	memcpy(buffer, &data, sizeof(NetworkSpawnData));
 	sock.sendData(buffer, 1 + sizeof(NetworkSpawnData), serverAddr);
 }
@@ -430,14 +446,16 @@ void spawnProjectile()
 
 void moveActors(float deltaTime)
 {
-	
 	// ---- Moving Actors ---- //
 	for (auto iter = actorMap.begin(); iter != actorMap.end(); iter++)
 	{
 		Actor* actor = iter->second;
 		actor->addToPosition(actor->getMoveDirection() * actor->getMoveSpeed() * deltaTime);
 		
-		// std::cout << actor->getPosition().toString() << std::endl;
+		if (actor != playerActor && actor->getPosition().length() == 0.f)
+		{
+			std::cout << "moveActors -- actor at origin" << std::endl;
+		}
 
 		// TODO: Implement propery approach to limiting actor movement. Different types of actors will handle the edge of the screen differently
 		// -- X-boundary -- //
@@ -473,36 +491,41 @@ void moveActors(float deltaTime)
 }
 
 
-void handleServerMessage(char* buffer, unsigned int bufferLen)
+void handleMessage(char* buffer, unsigned int bufferLen)
 {
 	switch (buffer[0]) 
 	{
-		case 'c':	// Connection Reply
+		case MSG_CONNECT:	// Connection Reply
 		{
-			std::cout << "Successfully connected\n";
+			printf("handleMessage / MSG_CONNECT");
 			bIsConnectedToServer = true;
-			stateSequenceId = *(unsigned int*)(buffer + 1); // NOTE: This can cause issues if memory isn't correctly alligned
-			std::cout << "Received Simulation Step: " << stateSequenceId << std::endl;
-			stateSequenceId += 5; // TODO: Hardcoded solution to getting the client ahead. Should later be replaced with a more elegent solution
 			break;
 		}
-		case 'r':	// Replicating
+		case MSG_TSTEP:	// Receive current simulation step
 		{
+			memcpy(&stateSequenceID, buffer + 1, sizeof(unsigned int));
+			stateSequenceID += 5;
+			printf("handleMessage / MSG_TSTEP -- Received State Sequence ID : %d", stateSequenceID);
+			break;
+		}
+		case MSG_REP:	// Replicating
+		{
+			// std::cout << "handleMessage / MSG_REP" << std::endl;
 			/* Updates actor states to match server data.
 			*  Spawns actors that were sent to client, but don't yet exist
 			*/
-			fixedUpdate_Actors(++buffer, --bufferLen);
+			replicateState(++buffer, --bufferLen); // TODO: Fixed update actors shouldn't be here. It should always be called and check for missing states when comparing
 			break;
 		}
-		case 'i':	// Receiving Controlled Actor ID
+		case MSG_ID:	// Receiving Controlled Actor ID
 		{
 			memcpy(&playerActorID, ++buffer, sizeof(unsigned int));
-			std::cout << "Receiving playerActorID: " << playerActorID << std::endl;
+			printf("handleMessage / MSG_ID : playerActorID: %d", playerActorID);
 			break;
 		}
-		case 's':
+		case MSG_SPAWN:
 		{
-			std::cout << "Client::handleServerMessage / s -- ";
+			printf("handleMessage / MSG_SPAWN");
 
 			/* Reply to Spawn Request
 			*  Links locally spawned dummy with authoritative server copy
@@ -512,74 +535,49 @@ void handleServerMessage(char* buffer, unsigned int bufferLen)
 
 			unlinkedProxies[data.dummyActorID]->setId(data.networkedActorID);
 			actorMap[data.networkedActorID] = unlinkedProxies[data.dummyActorID];
-
-			std::cout << actorMap[data.networkedActorID]->toString() << std::endl;
-
 			unlinkedProxies.erase(data.dummyActorID);
-
-			break;
-		}
-		case 't':
-		{
-			std::cout << "client::handleServerMessage/t" << std::endl;
-			//currTime = glfwGetTime();
-			//diff = currTime - lastTime;
-			//std::cout << diff << std::endl;
+			
+			printf("  (dummyActorID, networkedActorID) : (%d , %d)", data.dummyActorID, data.networkedActorID);
 			break;
 		}
 	}
 }
 
 
-void fixedUpdate_Actors(char* buffer, int bufferLen)
+void replicateState(char* buffer, int bufferLen)
 {
-	std::cout << "Client::fixedUpdate_Actors\n";
+	// std::cout << "Client::replicateState\n";
 
-
-	// TODO: Actor's must have a mesh instantiated when they're created. Data sent across must indicate the type of actor
-	//       Alternatively, we send spawn and destroy messages, which contain all the required actor data, including the type of actor
-	/* -- Schema --
-	*  0  - 3  : stateSequenceId
-	*  (N + ...)
-	*  0  - 3  : id
-	*  4  - 16 : location
-	*  15 - 27 : rotation
-	*/
-
-
-	// -- Creating numActors & Checking for invalid bufferLen -- //
+	// -- Creating numActorsReceived & Checking for invalid bufferLen -- //
 	unsigned int numActorsReceived = -1;
-	float check = (bufferLen - sizeof(unsigned int)) / (float)sizeof(Actor);
+	float check = (bufferLen - sizeof(unsigned int)) / (float)sizeof(ActorNetData);
 	if (check - floor(check) == 0.f)
 		numActorsReceived = (int)floor(check);
 	if (numActorsReceived == -1)
 	{
-		std::cout << "Client::fixedUpdate_Actors -- length of buffer not wholly divisible by sizeof(Actor)\n";
+		printf("Client::replicateState -- length of buffer not wholly divisible by sizeof(ActorNetData)");
 		return;
 	}
 
 
-	// -- Creating and Copying to stateSequenceId -- //
-	unsigned int stateSequenceId = -1;
-	memcpy(&stateSequenceId, buffer, sizeof(unsigned int));
+	// -- Creating and Copying to stateSequenceID -- //
+	unsigned int stateSequenceID = -1;
+	memcpy(&stateSequenceID, buffer, sizeof(unsigned int));
 	buffer += sizeof(unsigned int);
 
 
 	// -- Reading Actors -- //
 	Actor* actor;
-	std::vector<Actor*> recvActors;
 	for (unsigned int i = 0; i < numActorsReceived; i++)
 	{
 		ActorNetData netData;
 		memcpy(&netData, buffer, sizeof(netData));
-
-		recvActors.push_back(Actor::netDataToActor(netData));
 		
 		// -- New Actor Encountered -- //
 		if (actorMap.count(netData.id) == 0)
 		{
 			// -- Add actor to map -- //
-			actor = Actor::createActorFromBlueprint(ABP_GEAR, netData.Position, netData.Rotation, netData.id, true);
+			actor = new Actor(netData);
 			actorMap[netData.id] = actor;
 		}
 		else // -- Actor found. Updating Actor data -- //
@@ -587,29 +585,38 @@ void fixedUpdate_Actors(char* buffer, int bufferLen)
 			actor = actorMap[netData.id];
 			actor->setPosition(netData.Position);
 			actor->setRotation(netData.Rotation);
+			// std::cout << actor->getPosition().toString() << std::endl;
 		}
 
+		// -- Checking to see if we've encountered the player's controlled actor -- //
 		if (netData.id == playerActorID && actor != playerActor)
 		{
-			printf("Client::fixedUpdate_Actors -- Updating playerActor\n");
+			printf("Client::replicateState -- Updating playerActor\n");
 			playerActor = actor;
 		}
-		buffer += sizeof(Actor);
-	}
+		buffer += sizeof(ActorNetData);
+	}//~ Handling single actor of those received
+
 
 
 	// -- Creating State and Checking for equality -- //
-	GameState* state = new GameState(stateSequenceId, recvActors);
-	GameState* clientState = stateBuffer.getStateBySequenceId(stateSequenceId);
+	std::vector<Actor*> temp;
+	for (auto iter = actorMap.begin(); iter != actorMap.end(); iter++)
+	{
+		temp.push_back(iter->second);
+	}
+	GameState* state = new GameState(stateSequenceID, temp);
+	GameState* clientState = stateBuffer.getStateBySequenceId(stateSequenceID);
 	if (!clientState)
 	{
-		std::cout << "fixedUpdate_Actors -- !clientState" << std::endl;
+		// std::cout << "replicateState -- !clientState" << std::endl;
 	}
+	
 
 
 	if ((clientState == state) == false)
 	{
-		// std::cout << "fixedUpdate_Actors -- Not equivalent" << std::endl;
+		// std::cout << "replicateState -- Not equivalent" << std::endl;
 	}
 	
 
@@ -621,6 +628,40 @@ void fixedUpdate_Actors(char* buffer, int bufferLen)
 		// TODO: Reconcile
 	}
 	delete state;
+}
+
+/*
+Reads NUM_PACKETS_PER_CYCLE messages from the receive buffer.
+Anything that isnt MSG_REP, will be processed immediately.
+Only the most recently received MSG_REP, within NUM_PACKETS_PER_CYCLE, will be processed.
+*/
+void readRecvBuffer()
+{
+	// ----  Receiving Data from Server ----  // Receives data from server regardless of state.
+	char* tempBuffer{};
+	int recvBufferLen = 0;
+	int tempBufferLen = 0;
+	sockaddr_in recvAddr; // This is never used on purpose. Code smell
+	for (int i = 0; i < NUM_PACKETS_PER_CYCLE; i++)
+	{
+		tempBuffer = sock.recvData(tempBufferLen, recvAddr);
+		if (tempBufferLen == 0)
+		{
+			printf("client::reading packets -- read all packets");
+			break;
+		}
+		if (*tempBuffer != MSG_REP)
+		{
+			handleMessage(tempBuffer, tempBufferLen);
+			continue;
+		}
+		recvBuffer = tempBuffer;
+		recvBufferLen = tempBufferLen;
+	}
+	if (recvBufferLen > 0)
+	{
+		handleMessage(recvBuffer, recvBufferLen);
+	}
 }
 
 

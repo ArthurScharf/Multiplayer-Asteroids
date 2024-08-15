@@ -9,87 +9,106 @@
 unsigned int Actor::nextId = 0;
 unsigned int Actor::numCachedModels = 0;
 Model* Actor::modelCache[256];
+bool Actor::bHasInitializedModelCache = false;
 
 
 void Actor::loadModelCache()
 {
-	modelCache[numCachedModels] = new Model("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx");
-	modelCache[numCachedModels] = new Model("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/chair/chair.fbx");
-	numCachedModels = 2;
+	modelCache[numCachedModels++] = new Model("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx");
+	std::cout << "Actor::loadModelCache -- \"Default\" loaded" << std::endl;
+	modelCache[numCachedModels++] = new Model("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx");
+	std::cout << "Actor::loadModelCache -- \"Player Character\" loaded" << std::endl;
+	modelCache[numCachedModels++] = new Model("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/chair/chair.fbx");
+	std::cout << "Actor::loadModelCache -- \"Projectile\" Loaded" << std::endl;
+
+	bHasInitializedModelCache = true;
 }
 
-
-Actor* Actor::createActorFromBlueprint(char blueprintId, Vector3D position, Vector3D rotation, unsigned int replicatedId, bool bClient)
-{
-	std::string path = "";
-	float moveSpeed;
-	Vector3D moveDirection;
-
-	switch (blueprintId)
-	{
-		case ABP_GEAR: // 0 --> Gear
-		{
-			path = "C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx";
-			moveSpeed = 70.f; // Character movespeed
-			moveDirection.zero();
-			break;
-		}
-		case ABP_PROJECTILE: // 1 --> Projectile
-		{
-			path = "C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/chair/chair.fbx";
-			//moveSpeed = 120.f; // projectile movespeed
-			moveSpeed = 1.f;
-			moveDirection = rotation;
-			break;
-		}
-		default:
-		{
-			break;
-		}
-	}
-
-	Actor* actor = (bClient) ? new Actor(position, rotation, replicatedId) : new Actor(position, rotation);
-	actor->setMoveSpeed(moveSpeed);
-	actor->setMoveDirection(moveDirection);
-	if (bClient && path != "")
-	{
-		Model* temp = new Model(path);
-		if (temp) actor->model = temp;
-	}
-	return actor;
-}
 
 
 Actor* Actor::netDataToActor(ActorNetData data)
 {
-	Actor* actor = new Actor(data.Position, data.Rotation, data.id);
-	actor->setMoveDirection(data.moveDirection);
+	Actor* actor = new Actor(data);
 	return actor;
 }
 
-Actor::Actor(Vector3D& position, Vector3D& rotation)
-	: Position(position), Rotation(rotation), id(nextId++), moveDirection(0.f), moveSpeed(0.f)
-{}
 
-
-Actor::Actor(Vector3D& position, Vector3D& rotation, unsigned int replicatedId)
-	 : Position(position), Rotation(rotation), id(replicatedId), moveDirection(0.f), moveSpeed(0.f)
+Actor::Actor(Vector3D _position, Vector3D _rotation, EActorBlueprintID _blueprintID)
+	: Position(_position), Rotation(_rotation), id(nextId++), blueprintID(_blueprintID)
 {
-	model = nullptr; // Why is this insufficient to avoid a bug from loading? If I use InitializeModel() with it failing, the system doesnt throw any exceptions
+	model = nullptr; // Server doesn't render anything so model isn't needed
 
-	/*
-	* BUG
-	* I think what's happening is this:
-	* Model being nullptr causes some kind of problem within a vector somewhere.
-	* Even a failed call InitializeModel will result in a non-null value
-	* This non-null value avoids the problem
-	*/
+	switch (blueprintID)
+	{
+	case ABI_PlayerCharacter:
+	{
+		moveSpeed = 70.f;
+		moveDirection.zero();
+		break;
+	}
+	case ABI_Projectile:
+	{
+		moveSpeed = 30.f; // TEMP. 120.f
+		moveDirection = _rotation;
+		break;
+	}
+	default:
+	{
+		// Is warning bc we may need a reason to create actor with custom settings.
+		printf("WARNING::Actor::Actor -- no blueprint type was passed. Requires manual construction");
+		moveSpeed = 0.f;
+		moveDirection.zero();
+		break;
+	}
+	}
 }
+
+
+Actor::Actor(ActorNetData data)
+	 : id(data.id), moveDirection(data.moveDirection), moveSpeed(data.moveSpeed)
+{
+	if (!Actor::bHasInitializedModelCache)
+	{
+		printf("WARNING::Actor::Actor -- model cache not loaded. Doing so now");
+		Actor::loadModelCache();
+	}
+	if (data.blueprintID == ABI_Default)
+	{
+		printf("WARNING::Actor::Actor -- default blueprint ID");
+	}
+
+	/* Why not just set this in the member initializer list?
+	By doing things this way, I don't need to annoyingly maintain multiple instances of the switch statement that
+	sets the movement speed and direction for each type of actor	*/
+	Actor(data.Position, data.Rotation, data.blueprintID);
+	nextId--;
+
+	
+	/* -- NOTE --
+	Cached models are stored at the same index as their corresponding EActorBlueprintID value.
+	Thus, we can use the value of blueprintID to find the correct model, including default models
+	*/
+	model = modelCache[data.blueprintID];
+}
+
+
+
+Actor::Actor(Vector3D _position, Vector3D _rotation, EActorBlueprintID _blueprintID, unsigned int _proxyID)
+{
+	Actor(_position, _rotation, _blueprintID);
+	nextId--; // above cstr increments id. We don't want this, since the ID for this actor is not used, since it's a proxy
+	model = modelCache[_blueprintID];
+	setId(_proxyID);
+}
+
+
 
 Actor::~Actor()
 {
 	// if (model) delete model; // BUG: I'm getting a memory error related to how the memory is aligned, it seems. I'll allow a memory leak for now
 }
+
+
 
 
 void Actor::addToPosition(Vector3D addend)
@@ -110,18 +129,30 @@ std::string Actor::toString()
 }
 
 
-void Actor::InitializeModel(const std::string& path)
-{
-	Model* temp = new Model(path);
-	if (temp) model = temp;
-}
 
 void Actor::Draw(Shader& shader)
 {
 	if (!model)
 		std::cout << "ERROR::Actor::Draw -- !model\n";
+	if (blueprintID != ABI_PlayerCharacter)
+	{
+		std::cout << "HERE" << std::endl;
+	}
 	shader.setVec3("positionOffset", glm::vec3(Position.x, Position.y, Position.z));
 	model->Draw(shader);
+}
+
+
+ActorNetData Actor::toNetData()
+{
+	ActorNetData data;
+	data.id = id;
+	data.blueprintID = blueprintID;
+	data.moveDirection = moveDirection;
+	data.moveSpeed = moveSpeed;
+	data.Position = Position;
+	data.Rotation = Rotation;
+	return data;
 }
 
 
@@ -176,7 +207,7 @@ unsigned int Actor::serialize(char* buffer, Actor* actor)
 ActorNetData Actor::deserialize(const char* buffer, unsigned int& bytesRead)
 {
 	ActorNetData netData;
-	bytesRead = sizeof(unsigned int) + (3 * sizeof(Vector3D));
+	bytesRead = sizeof(netData);
 	memcpy(&netData, buffer, bytesRead);
 	return netData;
 }
