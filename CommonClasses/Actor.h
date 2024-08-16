@@ -24,17 +24,37 @@
 #define ABP_PROJECTILE '\x1'
 
 
+
+
+
+/*
+Used to identify which model and actor parameter values are to be set.
+Used as index for model cache when setting actor's model ptr.
+*/
+enum EActorBlueprintID
+{
+	ABI_Default,
+	ABI_PlayerCharacter,
+	ABI_Projectile
+};
+
+
 /*
 * - Serves as a schema for reading actor data from a stream without constructing an entire actor
 * - Can be used for detecting required size when working with net buffers
+* 
+While it might be true that I could just serialize an actor directly, having this struct allows the data being serialized
+over the network to easily differ from the data that would be serialized if we were just using the actor class
+for size checks
 */
 struct ActorNetData
 {
 	unsigned int id;
-	// char actorBlueprintType;
+	EActorBlueprintID blueprintID; // Used to identify which actor blueprint this is
 	Vector3D Position;
 	Vector3D Rotation; // Should be a rotator. For now, is a Vector3D
 	Vector3D moveDirection; // Normalized vector choosing which direction this actor moves
+	float moveSpeed;
 };
 
 
@@ -62,23 +82,21 @@ private:
 	/* cached models for constructing actor blueprints */
 	static Model* modelCache[256];
 	static unsigned int numCachedModels;
+	static bool bHasInitializedModelCache;
 
 // -- Static Methods -- //
 public:
 	// Should be called before constructing any using create actor from blueprint method.
 	static void loadModelCache(); 
 
-	/*
-	* TODO:
-	* Client doesn't always replicate id. this function makes it unclear when it should be called
-	*/
-	static Actor* createActorFromBlueprint(char blueprintId, Vector3D position, Vector3D rotation, unsigned int replicatedId, bool bClient = false); 
+	/* -- Client Use Only -- */
 	static Actor* netDataToActor(ActorNetData data);
 
 
 // -- Members -- //
 private:
 	unsigned int id; // prefix const
+	EActorBlueprintID blueprintID;
 	Vector3D Position;
 	Vector3D Rotation; // Should be a rotator. For now, is a Vector3D
 	Vector3D moveDirection; // Normalized vector choosing which direction this actor moves
@@ -88,21 +106,28 @@ private:
 
 // -- Methods, Constructors, Destructors -- //
 public:
-	// NOTE: These might be redundant since we will probably never need to construct an actor that isn't a blueprint
-	Actor(Vector3D& position, Vector3D& rotation); // Server side
-	Actor(Vector3D& position, Vector3D& rotation, unsigned int replicatedId); // Client side
+	
+
+	/*
+	* bSetModel : server doesn't render so this can be set to false
+	* _id : allows for control of the ID being set. Called by client when creating a proxy actor
+	*/
+	Actor(Vector3D _position, Vector3D _rotation, EActorBlueprintID _blueprintID = ABI_Default, bool bSetModel = false, unsigned int _id = nextId++);
+	
 	~Actor();
+
+
 
 
 	void addToPosition(Vector3D addend);
 
 	std::string toString();
 
-	// Separate from cstr because models shouldn't always be loaded
-	void InitializeModel(const std::string& path);
-
 	void Draw(Shader& shader);
 
+	ActorNetData toNetData();
+
+	// DEPRECATED. May want to refactor to emplace a ActorNetData into the passed buffer
 	static unsigned int serialize(char* buffer, Actor* actor);
 	/*
 	* The signature is different than serialize because we want to instantiate an actor internally.
@@ -137,6 +162,8 @@ public:
 		_moveDirection.Normalize();
 		moveDirection = _moveDirection; 
 	}
+	
+	void setModel(Model* _model) { model = _model; }
 
 // -- Operators -- //
 	bool operator==(Actor* other)

@@ -39,21 +39,35 @@ struct IpAddress
 
 
 
+UDPSocket sock;
+// I doubt any other kind of message will exceed the size of this type of message
+char sendBuffer[1 + sizeof(unsigned int) + (MAX_ACTORS * sizeof(Actor))]{};
+char* recvBuffer{};
+sockaddr_in clientAddr;
+int clientAddr_len = sizeof(clientAddr);
 
 
-float updatePeriod = 1.f / 20.f; // Verbose to allow easy editing. Should be properly declared later // 20.f
-float deltaTime = 0.f;
 
-unsigned int stateSequenceId = 0;
 
 
 #define MAX_CLIENTS 4
 std::map<IpAddress, Actor*> clients;
 unsigned int numClients = 0;
 
-
 Actor* actors[MAX_ACTORS]{}; // Actors created and replicated
 unsigned int numActors = 0;
+
+
+
+
+
+bool bRunMainLoop = true;
+
+float updatePeriod = 1.f / 20.f; // Verbose to allow easy editing. Should be properly declared later // 20.f
+float deltaTime = 0.f;
+unsigned int stateSequenceID = 0;
+
+
 
 
 /*
@@ -64,47 +78,30 @@ std::map<unsigned int, std::set<Actor*>> preSpawnedActors;
 
 
 
-/*
-* Creates actor. 
-* Increments numActors
-* adds the created actor to actors
-*/
-Actor* createActor(Vector3D& pos, Vector3D& rot);
-/* Destroys actor.
-*  Decrements numActors.
-*  removes the created actor from actors
-*/
 // TODO: Implement Destroy Actor
 void moveActors(float deltaTime);
+
+/*
+buffer : The message as a string of data
+bufferLen : number of char's in the buffer
+*/
+void handleMessage(char* buffer, unsigned int bufferLen);
 
 
 // ---- SERVER ---- //
 int main()
 {
-	bool bTesting = true; // TEMP
-
-	UDPSocket sock;
 	sock.init(true);
+	clientAddr.sin_family = AF_INET;
+	clientAddr.sin_port = htons(4242);
+
 
 	std::chrono::steady_clock::time_point start = std::chrono::high_resolution_clock::now();
 	std::chrono::steady_clock::time_point end;
 
-	/*
-	* 1 byte : message type char
-	* sizeof(unsigned int) bytes : room for stateSequenceId
-	* remaining bytes. Actor replication
-	* 
-	* I doubt any other kind of message will exceed the size of this type of message
-	*/
-	char sendBuffer[1 + sizeof(unsigned int) + (MAX_ACTORS * sizeof(Actor))]{};
-	sockaddr_in clientAddr;
-	clientAddr.sin_family = AF_INET;
-	clientAddr.sin_port = htons(4242);
-	int clientAddr_len = sizeof(clientAddr);
-
 
 	float elapsedTimeSinceUpdate = 0.f;
-	while (true)
+	while (bRunMainLoop)
 	{
 		// -- Time Management -- //	
 		end = start;
@@ -116,28 +113,28 @@ int main()
 		moveActors(deltaTime);
 
 		
-		// -- Checking for spawn/respawn of player characters -- //
 		// BUG: There are two actors being created when we create an actor here
+
+		// -- Checking for spawn/respawn of player characters -- //
 		auto iter = clients.begin();
 		while (iter != clients.end())
 		{
-			// TODO: Create respawn timer
 			if (iter->second == nullptr)
 			{
-				// TODO: Properly choose a position for each client actor
-				iter->second = Actor::createActorFromBlueprint('\x0', Vector3D(0.f), Vector3D(0.f), 0, false);
+				printf("Creating client actor\n");
+
+				iter->second = new Actor(Vector3D(0.f), Vector3D(0.f), ABI_PlayerCharacter);
 				actors[numActors] = iter->second;
 				numActors++;
 				//iter->second = createActor(position, rotation);
 				//iter->second->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx");
-				printf("Creating client actor\n");
 				// QUESTION: Why would creating an actor in this way result in a nullptr error when trying to replicate
 				//iter->second = new Actor(position, rotation);
 				//numActors++;
 				//actors[numActors] = iter->second;
 
 				// -- Sending actor ID to client -- //
-				sendBuffer[0] = 'i';
+				sendBuffer[0] = MSG_ID;
 				unsigned int id = iter->second->getId();
 				memcpy(sendBuffer + 1, &id, sizeof(unsigned int));
 				/* QUESTION: Why would memcpy ing using the below line result in an exception being thrown ??? */
@@ -154,95 +151,10 @@ int main()
 
 		// -- Handling Client Messages -- //
 		int numBytesRead;
-		char* recvBuffer = sock.recvData(numBytesRead, clientAddr);
+		recvBuffer = sock.recvData(numBytesRead, clientAddr);
 		if (numBytesRead > 0) // Received Anything?
 		{
-			switch (recvBuffer[0]) // Instruction Received
-			{
-				case 'c': // Connect. Client wants to be added to list of connected clients
-				{
-					std::cout << "client connected\n"; // TODO: print client IP address
-					// - Storing client ip address - //
-					IpAddress ip;
-					ip._in_addr = clientAddr.sin_addr;
-					clients.insert({ ip, nullptr });
-					numClients++;
-
-					// - replying to message - //
-					/*
-					* data is message type & state of simulation so client can try to get ahead
-					*/
-					sendBuffer[0] = 'c';
-					memcpy(sendBuffer + 1, &stateSequenceId, sizeof(unsigned int));
-					sock.sendData(sendBuffer, 1 + sizeof(unsigned int), clientAddr);
-					break;
-				}
-				case 'r': // Client sending actor movement update
-				{
-					// Receives client inputs and uses them to update the state of that client's playerActor
-					// TODO: Handle rotation and action inputs like quitting or shooting
-					IpAddress ipAddr; // That I must construct one of these feels code smelly
-					ipAddr._in_addr = clientAddr.sin_addr;
-					if (clients.count(ipAddr) == 0)
-					{
-						std::cout << "Server::main/receiving_data -- received replication of input from unknown client. Ignoring";
-						break;
-					}
-					if (clients[ipAddr] == nullptr)
-					{
-						// The client attempting to replicate has no actor to move
-						break; 
-					}
-					ActorNetData netData;
-					memcpy(&netData, recvBuffer + 1, sizeof(netData));
-					Actor* actor = clients[ipAddr];
-					actor->setMoveDirection(netData.moveDirection);
-					break;
-				}
-				case 's': // Client spawned an actor.
-				{
-					std::cout << "Server / Receiving Data / s ...\n";
-
-					// -- Deformatting data & Spawning Actor -- // 
-					NetworkSpawnData data;
-					memcpy(&data, recvBuffer, sizeof(NetworkSpawnData));
-					
-
-					// TODO: temp solution to finding projetile position. May be permenant solution, but must first consider other options
-					IpAddress clientIp;
-					clientIp._in_addr = clientAddr.sin_addr;
-					Actor* clientActor = clients[clientIp];
-
-					Actor* projectile = Actor::createActorFromBlueprint(
-						ABP_PROJECTILE, 
-						clientActor->getPosition() + clientActor->getRotation() * 100.f,
-						Vector3D(1.f, 0.f, 0.f), 
-						0,
-						false
-					);
-					actors[numActors] = projectile;
-					numActors++;
-					data.networkedActorID = projectile->getId();
-					// preSpawnedActors[data.simulationStep].insert(projectile); // Creates new element if it doesn't already exist
-
-					// -- Sending Reply to Client -- //
-					char replyBuffer[sizeof(NetworkSpawnData)];
-					sock.sendData(replyBuffer, sizeof(NetworkSpawnData), clientAddr);
-
-					break;
-				}
-				case 't': // Case used for testing. Should not be in the final build
-				{
-					if (bTesting)
-					{
-						bTesting = false;
-						std::cout << "receiving test\n";
-						sendBuffer[0] = 't';
-						sock.sendData(sendBuffer, 1, clientAddr);
-					}
-					break;
-				}
-			}
+			handleMessage(recvBuffer, numBytesRead);
 		}
 
 
@@ -251,31 +163,36 @@ int main()
 		{
 
 			elapsedTimeSinceUpdate -= updatePeriod;
-			stateSequenceId++;
+			stateSequenceID++;
 
+			// std::cout << "Fixed update " << stateSequenceID << std::endl;
 		
 			// -- Sending Snapshot to Clients -- //
 			if (numClients <= 0) continue;
+
 			// - Packing actor data - //
-			sendBuffer[0] = 'r'; // 'r' --> actor replication message
-			char* tempBuffer = sendBuffer;
-			tempBuffer += 1; // skipping message type byte
-			memcpy(tempBuffer, &stateSequenceId, sizeof(unsigned int));
-			tempBuffer += sizeof(unsigned int); // Skipping state sequence ID bytes
+			sendBuffer[0] = MSG_REP;
+			unsigned int offset = 1; // Number of bytes to reach memory to be filled
+
+			memcpy(sendBuffer + 1, &stateSequenceID, sizeof(unsigned int));
+			offset += sizeof(unsigned int);
+
 			for (unsigned int i = 0; i < numActors; i++)
 			{
-				// std::cout << actors[i]->getPosition().toString() << std::endl;
-				// memcpy(tempBuffer, actors[i], sizeof(Actor));
-				Actor::serialize(tempBuffer, actors[i]);
-				tempBuffer += sizeof(Actor);
+				// Actor::serialize(tempBuffer, actors[i]);
+				ActorNetData data = actors[i]->toNetData();
+
+				// std::cout << "SENDING: " << data.Position.toString() << std::endl;
+			
+				memcpy(sendBuffer + 1 + sizeof(unsigned int) + (i * sizeof(ActorNetData)), &data, sizeof(ActorNetData));
+				offset += sizeof(ActorNetData);
 			}
 			// - Sending Actor data - //
-			unsigned int bufferLen = 1 + sizeof(unsigned int) + (numActors * sizeof(Actor));
 			for (auto it = clients.begin(); it != clients.end(); ++it)
 			{
-				//printf("Sending Snapshot\n");
+				// offset is now the length of the buffer in bytes
 				clientAddr.sin_addr = it->first._in_addr;
-				sock.sendData(sendBuffer, bufferLen, clientAddr);
+				sock.sendData(sendBuffer, 1 + sizeof(unsigned int) + (numActors * sizeof(ActorNetData)), clientAddr);
 			}
 		}//~ Fixed Update
 
@@ -292,12 +209,7 @@ int main()
 
 
 
-Actor* createActor(Vector3D& pos, Vector3D& rot)
-{
-	actors[numActors] = new Actor(pos, rot);
-	numActors++;
-	return actors[numActors-1];
-}
+
 
 
 void moveActors(float deltaTime)
@@ -307,10 +219,8 @@ void moveActors(float deltaTime)
 		Actor* actor = actors[i];
 		actor->addToPosition(actor->getMoveDirection() * actor->getMoveSpeed() * deltaTime);
 
-		if (actor->getId() != 0)
-			std::cout << actor->toString() << std::endl;
 
-
+		// std::cout << "moveActors / actor: " << i << " / " << actors[i]->getPosition().toString() << std::endl;
 
 		// TODO: Implement propery approach to limiting actor movement. Different types of actors will handle the edge of the screen 
 		// -- X-Boundary Checking -- //
@@ -332,5 +242,83 @@ void moveActors(float deltaTime)
 		{
 			actor->setPosition(Vector3D(actor->getPosition().x, -50.f, actor->getPosition().z));
 		}
+	}
+}
+
+
+void handleMessage(char* buffer, unsigned int bufferLen)
+{
+	IpAddress ip;
+	ip._in_addr = clientAddr.sin_addr;
+	switch (recvBuffer[0]) // Instruction Received
+	{
+	case MSG_CONNECT: // Connect. Client wants to be added to list of connected clients
+	{
+		std::cout << "handleMessage / MSG_CONNECT" << std::endl;
+		clients.insert({ ip, nullptr });
+		numClients++;
+
+		// - replying to message - //
+		sendBuffer[0] = MSG_CONNECT;
+		sock.sendData(sendBuffer, 1, clientAddr);
+		break;
+	}
+	case MSG_TSTEP: // Request for current state sequence id or "Timestep"
+	{
+		std::cout << "handleMessage / MSG_TSTEP / Sending state sequence ID: " << stateSequenceID << std::endl;
+		sendBuffer[0] = MSG_TSTEP;
+		memcpy(sendBuffer + 1, &stateSequenceID, sizeof(unsigned int));
+		sock.sendData(sendBuffer, 1 + sizeof(unsigned int), clientAddr);
+	}
+	case MSG_REP: // Client sending actor movement update
+	{
+		// std::cout << "handleMessage / MSG_REP" << std::endl;
+		// Receives client inputs and uses them to update the state of that client's playerActor
+		if (clients.count(ip) == 0)
+		{
+			std::cout << "handleMessage / MSG_REP : received replication of input from unknown client. Ignoring";
+			break;
+		}
+		if (clients[ip] == nullptr)
+		{
+			// The client attempting to replicate has no actor to move
+			break;
+		}
+		ActorNetData netData;
+		memcpy(&netData, recvBuffer+1, sizeof(netData));
+		Actor* actor = clients[ip];
+		actor->setMoveDirection(netData.moveDirection);
+		break;
+	}
+	case MSG_SPAWN: // Client spawned an actor.
+	{
+		std::cout << "handleMessage / MSG_SPAWN" << std::endl;
+
+		// -- Deformatting data & Spawning Actor -- // 
+		NetworkSpawnData data;
+		memcpy(&data, recvBuffer, sizeof(NetworkSpawnData));
+
+		Actor* clientActor = clients[ip];
+		Actor* projectile = new Actor(
+			clientActor->getPosition() + (clientActor->getRotation() * 100.f),
+			Vector3D(1.f, 0.f, 0.f),
+			ABI_Projectile
+		);
+		actors[numActors] = projectile;
+		numActors++;
+		data.networkedActorID = projectile->getId();
+
+		// -- Sending Reply to Client -- //
+		char replyBuffer[sizeof(NetworkSpawnData)];
+		sock.sendData(replyBuffer, sizeof(NetworkSpawnData), clientAddr);
+
+		break;
+	}
+	case MSG_EXIT: 
+	{
+		std::cout << "handleMessage / MSG_EXIT" << std::endl;
+		bRunMainLoop = false;
+		break;
+	}
 	}
 }
