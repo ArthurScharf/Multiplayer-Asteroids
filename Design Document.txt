@@ -427,6 +427,19 @@ dummy projectile will self simulate and will never be bound.
 When can this happen?
  If packets are dropped
  If the round trip isn't fast enough.
+
+
+
+
+
+
+
+
+----- Proxy Rendering Problem -----
+Server replies with spawned actor at almost immediately.
+The client code that removes the proxy is called when reply is received.
+Proxies copy is only replicated during next fixed update.
+Proxy should only be removed once replicated copy appears
   
 
 

@@ -44,6 +44,10 @@ Actor::Actor(Vector3D _position, Vector3D _rotation, EActorBlueprintID _blueprin
 		*/
 		model = modelCache[blueprintID];
 	}
+	else
+	{
+		model = nullptr;
+	}
 
 	switch (blueprintID)
 	{
@@ -106,11 +110,9 @@ std::string Actor::toString()
 void Actor::Draw(Shader& shader)
 {
 	if (!model)
-		std::cout << "ERROR::Actor::Draw -- !model\n";
-	if (blueprintID != ABI_PlayerCharacter)
 	{
-		std::cout << "HERE" << std::endl;
-		std::cout << "ID: " << id << " , " <<  blueprintID << std::endl;
+		std::cout << "ERROR::Actor::Draw -- !model\n";
+		return;
 	}
 	shader.setVec3("positionOffset", glm::vec3(Position.x, Position.y, Position.z));
 	model->Draw(shader);

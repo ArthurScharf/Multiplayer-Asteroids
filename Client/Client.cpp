@@ -257,27 +257,23 @@ int main()
 		{
 			iter->second->Draw(shader); // Actor handles setting the position offset for shader
 		}
-		// DEBUG: Not simulating Proxies
-		//for (auto iter = unlinkedProxies.begin(); iter != unlinkedProxies.end(); iter++)
-		//{
-		//	iter->second->Draw(shader);
-		//}
+		for (auto iter = unlinkedProxies.begin(); iter != unlinkedProxies.end(); iter++)
+		{
+			iter->second->Draw(shader);
+		}
 
 
 		// ---- Fixed Frequency Update ---- //
 		if (elapsedTimeSinceUpdate >= updatePeriod)
 		{
-			// TESTING
-			//for (auto iter = actorMap.begin(); iter != actorMap.end(); iter++)
-			//{
-			//	std::cout << iter->second->toString() << std::endl;
-			//}
-
-
 			elapsedTimeSinceUpdate -= updatePeriod;
 			stateSequenceID++;
 
 			// std::cout << "Fixed update " << stateSequenceID << std::endl;
+
+
+			std::cout << "num actors : " << actorMap.size() << " , " << "num Proxies : " << unlinkedProxies.size() << std::endl;
+
 
 			// -- Creating New State -- //
 			std::vector<Actor*> actors;
@@ -416,7 +412,7 @@ void spawnProjectile()
 {
 	if (!playerActor) return;
 
-	printf("Client::spawnProjectile");
+	printf("Client::spawnProjectile\n");
 
 	/* -- NOTE -- 
 	I didn't feel like this single case for spawning a proxy deserved it's own constructor, as this would
@@ -428,19 +424,21 @@ void spawnProjectile()
 		playerActor->getPosition() + (playerActor->getRotation() * 100.f),
 		playerActor->getRotation(),
 		ABI_Projectile,
+		true,
 		nextProxyID
 	);
-	projectile->setPosition(playerActor->getPosition() + (playerActor->getRotation() * 100.f));
 	unlinkedProxies.insert({ nextProxyID, projectile });
 
 	// ---- Sending data to server ---- //
 	char buffer[sizeof(NetworkSpawnData)];
 	NetworkSpawnData data;
-	data.dummyActorID = nextProxyID++;
+	data.dummyActorID = nextProxyID;
 	data.simulationStep = stateSequenceID;
 	data.networkedActorID = 0; // The proxy's ID doesn't matter to the server
 	memcpy(buffer, &data, sizeof(NetworkSpawnData));
 	sock.sendData(buffer, 1 + sizeof(NetworkSpawnData), serverAddr);
+
+	nextProxyID++;
 }
 
 
@@ -452,12 +450,8 @@ void moveActors(float deltaTime)
 		Actor* actor = iter->second;
 		actor->addToPosition(actor->getMoveDirection() * actor->getMoveSpeed() * deltaTime);
 		
-		if (actor != playerActor && actor->getPosition().length() == 0.f)
-		{
-			std::cout << "moveActors -- actor at origin" << std::endl;
-		}
-
 		// TODO: Implement propery approach to limiting actor movement. Different types of actors will handle the edge of the screen differently
+		
 		// -- X-boundary -- //
 		if (actor->getPosition().x > 62.f) // I have no idea why this value is edge of the screen
 		{
@@ -467,8 +461,6 @@ void moveActors(float deltaTime)
 		{
 			actor->setPosition(Vector3D(-62.f, actor->getPosition().y, actor->getPosition().z));
 		}
-
-
 		// -- Y-boundary -- //
 		if (actor->getPosition().y > 50.f)
 		{
@@ -497,7 +489,7 @@ void handleMessage(char* buffer, unsigned int bufferLen)
 	{
 		case MSG_CONNECT:	// Connection Reply
 		{
-			printf("handleMessage / MSG_CONNECT");
+			printf("handleMessage / MSG_CONNECT\n");
 			bIsConnectedToServer = true;
 			break;
 		}
@@ -505,7 +497,7 @@ void handleMessage(char* buffer, unsigned int bufferLen)
 		{
 			memcpy(&stateSequenceID, buffer + 1, sizeof(unsigned int));
 			stateSequenceID += 5;
-			printf("handleMessage / MSG_TSTEP -- Received State Sequence ID : %d", stateSequenceID);
+			printf("handleMessage / MSG_TSTEP -- Received State Sequence ID : %d\n", stateSequenceID);
 			break;
 		}
 		case MSG_REP:	// Replicating
@@ -520,12 +512,12 @@ void handleMessage(char* buffer, unsigned int bufferLen)
 		case MSG_ID:	// Receiving Controlled Actor ID
 		{
 			memcpy(&playerActorID, ++buffer, sizeof(unsigned int));
-			printf("handleMessage / MSG_ID : playerActorID: %d", playerActorID);
+			printf("handleMessage / MSG_ID : playerActorID: %d\n", playerActorID);
 			break;
 		}
 		case MSG_SPAWN:
 		{
-			printf("handleMessage / MSG_SPAWN");
+			printf("handleMessage / MSG_SPAWN\n");
 
 			/* Reply to Spawn Request
 			*  Links locally spawned dummy with authoritative server copy
@@ -533,11 +525,15 @@ void handleMessage(char* buffer, unsigned int bufferLen)
 			NetworkSpawnData data;
 			memcpy(&data, buffer, sizeof(NetworkSpawnData));
 
-			unlinkedProxies[data.dummyActorID]->setId(data.networkedActorID);
-			actorMap[data.networkedActorID] = unlinkedProxies[data.dummyActorID];
+			/*
+			unlinked proxy becomes a normal actor. This avoids the overhead cost of constructing a new actor when required
+			*/
+			Actor* linkedActor = unlinkedProxies[data.dummyActorID];
+			linkedActor->setId(data.networkedActorID);
+			actorMap[data.networkedActorID] = linkedActor;
 			unlinkedProxies.erase(data.dummyActorID);
-			
-			printf("  (dummyActorID, networkedActorID) : (%d , %d)", data.dummyActorID, data.networkedActorID);
+
+			printf("  (dummyActorID, networkedActorID) : (%d , %d)\n", data.dummyActorID, data.networkedActorID);
 			break;
 		}
 	}
@@ -576,6 +572,11 @@ void replicateState(char* buffer, int bufferLen)
 		// -- New Actor Encountered -- //
 		if (actorMap.count(netData.id) == 0)
 		{
+			/*
+			* ---- DANGER ----
+			* if replication happens BEFORE spawn reply can return, We'll have two versions of the actor floating around
+			*/
+
 			// -- Add actor to map -- //
 			actor = new Actor(netData.Position, netData.Rotation, netData.blueprintID, true, netData.id);
 			actorMap[netData.id] = actor;
@@ -585,9 +586,9 @@ void replicateState(char* buffer, int bufferLen)
 			actor = actorMap[netData.id];
 			actor->setPosition(netData.Position);
 			actor->setRotation(netData.Rotation);
-			// std::cout << actor->getPosition().toString() << std::endl;
+			actor->setMoveDirection(netData.moveDirection);
+			actor->setMoveSpeed(netData.moveSpeed);
 		}
-
 		// -- Checking to see if we've encountered the player's controlled actor -- //
 		if (netData.id == playerActorID && actor != playerActor)
 		{
@@ -629,6 +630,9 @@ void replicateState(char* buffer, int bufferLen)
 	}
 	delete state;
 }
+
+
+
 
 /*
 Reads NUM_PACKETS_PER_CYCLE messages from the receive buffer.

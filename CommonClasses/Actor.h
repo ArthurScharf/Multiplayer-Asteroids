@@ -58,14 +58,6 @@ struct ActorNetData
 };
 
 
-/*
-* Used by client and server to link unlinked proxies with their authoritative counterparts
-*/
-struct proxyLinkPackage
-{
-	unsigned int proxyLinkID;
-	unsigned int actorNetworkID; 
-};
 
 
 /*

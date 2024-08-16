@@ -5,11 +5,17 @@
 
 ( ) : Morphing task. Usually something to understand so an actual task can replace this one
 
+--------------------------
 
 
 
+[ ] BUG: If somehow the reply to spawn messages reaches our client AFTER the spawned actor is replicated, we'll have problems
 
-[ ] I don't understand how to call other constructors from within constructors. This is causing an instantiation bug, I think
+[ ] BUG: Proxies aren't being moved correctly
+
+[ ] Make Server::actors a vector so it automatically resizes
+
+
 
 
 

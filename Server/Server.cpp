@@ -54,7 +54,7 @@ int clientAddr_len = sizeof(clientAddr);
 std::map<IpAddress, Actor*> clients;
 unsigned int numClients = 0;
 
-Actor* actors[MAX_ACTORS]{}; // Actors created and replicated
+Actor* actors[MAX_ACTORS]{}; // THIS SHOULD BE A VECTOR
 unsigned int numActors = 0;
 
 
@@ -86,6 +86,10 @@ buffer : The message as a string of data
 bufferLen : number of char's in the buffer
 */
 void handleMessage(char* buffer, unsigned int bufferLen);
+
+
+
+
 
 
 // ---- SERVER ---- //
@@ -124,8 +128,7 @@ int main()
 				printf("Creating client actor\n");
 
 				iter->second = new Actor(Vector3D(0.f), Vector3D(0.f), ABI_PlayerCharacter);
-				actors[numActors] = iter->second;
-				numActors++;
+				actors[numActors++] = iter->second;
 				//iter->second = createActor(position, rotation);
 				//iter->second->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx");
 				// QUESTION: Why would creating an actor in this way result in a nullptr error when trying to replicate
@@ -206,10 +209,6 @@ int main()
 
 	return 0;
 };
-
-
-
-
 
 
 void moveActors(float deltaTime)
@@ -304,13 +303,12 @@ void handleMessage(char* buffer, unsigned int bufferLen)
 			Vector3D(1.f, 0.f, 0.f),
 			ABI_Projectile
 		);
-		actors[numActors] = projectile;
-		numActors++;
+		actors[numActors++] = projectile;
 		data.networkedActorID = projectile->getId();
 
 		// -- Sending Reply to Client -- //
-		char replyBuffer[sizeof(NetworkSpawnData)];
-		sock.sendData(replyBuffer, sizeof(NetworkSpawnData), clientAddr);
+		memcpy(sendBuffer, &data, sizeof(NetworkSpawnData));
+		sock.sendData(sendBuffer, sizeof(NetworkSpawnData), clientAddr);
 
 		break;
 	}
