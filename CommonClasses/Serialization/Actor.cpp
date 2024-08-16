@@ -28,15 +28,22 @@ void Actor::loadModelCache()
 
 Actor* Actor::netDataToActor(ActorNetData data)
 {
-	Actor* actor = new Actor(data);
+	Actor* actor = new Actor(data.Position, data.Rotation, data.blueprintID, true, data.id);
 	return actor;
 }
 
 
-Actor::Actor(Vector3D _position, Vector3D _rotation, EActorBlueprintID _blueprintID)
-	: Position(_position), Rotation(_rotation), id(nextId++), blueprintID(_blueprintID)
+Actor::Actor(Vector3D _position, Vector3D _rotation, EActorBlueprintID _blueprintID, bool bSetModel, unsigned int _id)
+	: Position(_position), Rotation(_rotation), id(_id), blueprintID(_blueprintID)
 {
-	model = nullptr; // Server doesn't render anything so model isn't needed
+	if (bSetModel)
+	{
+		/* -- NOTE --
+		Cached models are stored at the same index as their corresponding EActorBlueprintID value.
+		Thus, we can use the value of blueprintID to find the correct model, including default models
+		*/
+		model = modelCache[blueprintID];
+	}
 
 	switch (blueprintID)
 	{
@@ -64,49 +71,15 @@ Actor::Actor(Vector3D _position, Vector3D _rotation, EActorBlueprintID _blueprin
 }
 
 
-Actor::Actor(ActorNetData data)
-	 : id(data.id), moveDirection(data.moveDirection), moveSpeed(data.moveSpeed)
-{
-	if (!Actor::bHasInitializedModelCache)
-	{
-		printf("WARNING::Actor::Actor -- model cache not loaded. Doing so now");
-		Actor::loadModelCache();
-	}
-	if (data.blueprintID == ABI_Default)
-	{
-		printf("WARNING::Actor::Actor -- default blueprint ID");
-	}
-
-	/* Why not just set this in the member initializer list?
-	By doing things this way, I don't need to annoyingly maintain multiple instances of the switch statement that
-	sets the movement speed and direction for each type of actor	*/
-	Actor(data.Position, data.Rotation, data.blueprintID);
-	nextId--;
-
-	
-	/* -- NOTE --
-	Cached models are stored at the same index as their corresponding EActorBlueprintID value.
-	Thus, we can use the value of blueprintID to find the correct model, including default models
-	*/
-	model = modelCache[data.blueprintID];
-}
-
-
-
-Actor::Actor(Vector3D _position, Vector3D _rotation, EActorBlueprintID _blueprintID, unsigned int _proxyID)
-{
-	Actor(_position, _rotation, _blueprintID);
-	nextId--; // above cstr increments id. We don't want this, since the ID for this actor is not used, since it's a proxy
-	model = modelCache[_blueprintID];
-	setId(_proxyID);
-}
-
 
 
 Actor::~Actor()
 {
 	// if (model) delete model; // BUG: I'm getting a memory error related to how the memory is aligned, it seems. I'll allow a memory leak for now
 }
+
+
+
 
 
 
@@ -137,6 +110,7 @@ void Actor::Draw(Shader& shader)
 	if (blueprintID != ABI_PlayerCharacter)
 	{
 		std::cout << "HERE" << std::endl;
+		std::cout << "ID: " << id << " , " <<  blueprintID << std::endl;
 	}
 	shader.setVec3("positionOffset", glm::vec3(Position.x, Position.y, Position.z));
 	model->Draw(shader);

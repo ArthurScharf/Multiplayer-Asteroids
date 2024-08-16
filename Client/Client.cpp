@@ -577,7 +577,7 @@ void replicateState(char* buffer, int bufferLen)
 		if (actorMap.count(netData.id) == 0)
 		{
 			// -- Add actor to map -- //
-			actor = new Actor(netData);
+			actor = new Actor(netData.Position, netData.Rotation, netData.blueprintID, true, netData.id);
 			actorMap[netData.id] = actor;
 		}
 		else // -- Actor found. Updating Actor data -- //

@@ -89,9 +89,7 @@ public:
 	// Should be called before constructing any using create actor from blueprint method.
 	static void loadModelCache(); 
 
-	/*
-	* TODO: netDataToActor doesn't need to be static. Can be a get
-	*/
+	/* -- Client Use Only -- */
 	static Actor* netDataToActor(ActorNetData data);
 
 
@@ -108,23 +106,13 @@ private:
 
 // -- Methods, Constructors, Destructors -- //
 public:
-	/* -- Server Version --
-	Uses next actor ID since spawning an actor is server authoritative
-	Doesn't set a model for the actor since the server doesn't do any rendering		*/
-	Actor(Vector3D _position, Vector3D _rotation, EActorBlueprintID _blueprintID);
 	
-	/* -- Client Version --
-	Clients only ever create a remote copy of a server actor. Required that we already have a populated ActorNetData.
-	Will set the model for the actor.	*/
-	Actor(ActorNetData data);
 
-	/* -- Proxy Version -- 
-	To implement client-predictive spawns, the client must sometimes construct an actor directly.
-	This method is here to give complete control to the client for this purpose
-
-	NOTE: The existence of this method feels code smellish
+	/*
+	* bSetModel : server doesn't render so this can be set to false
+	* _id : allows for control of the ID being set. Called by client when creating a proxy actor
 	*/
-	Actor(Vector3D _position, Vector3D _rotation, EActorBlueprintID _blueprintID, unsigned int _proxyID);
+	Actor(Vector3D _position, Vector3D _rotation, EActorBlueprintID _blueprintID = ABI_Default, bool bSetModel = false, unsigned int _id = nextId++);
 	
 	~Actor();
 
