@@ -1,0 +1,24 @@
+
+
+RPC's Require
+ - Simulation Step it's called in
+ - seconds since last update, so procedure call is made at the right moment. While both client and server update at a fixed frequency,
+   the server and client also simulate frame by frame for different reasons.
+   Server does so to maintain simulation accuracy, and client does so to be as responsive as possible for the player
+ - Data to call RPC
+
+
+
+
+How do I track which RPC's are to be called?
+	- Server/Client tells container which simulation step is being ran
+	- container handles callbacks
+
+
+	How do I store callbacks?
+		- What if method to be called back is private? can't be done.
+			Can I make all callbacks public? 
+				Yes. Having a public communication point is the same as being public. 
+		- I can store callbacks as function pointers
+
+	How do I make the callbacks at the correct time?

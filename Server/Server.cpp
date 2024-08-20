@@ -1,5 +1,5 @@
 #include <chrono>
-
+#include <functional>
 #include <iostream>
 #include <map>
 #include <set>
@@ -54,9 +54,6 @@ int clientAddr_len = sizeof(clientAddr);
 std::map<IpAddress, Actor*> clients;
 unsigned int numClients = 0;
 
-//Actor* actors[MAX_ACTORS]{}; // THIS SHOULD BE A VECTOR
-//unsigned int numActors = 0;
-
 std::vector<Actor*> actors;
 
 
@@ -67,16 +64,18 @@ bool bRunMainLoop = true;
 
 float updatePeriod = 1.f / 20.f; // Verbose to allow easy editing. Should be properly declared later // 20.f
 float deltaTime = 0.f;
+float secondsSinceLastUpdate = 0.f;
 unsigned int stateSequenceID = 0;
 
 
 
 
-/*
-* KEY: Simulation step each set of actors are to begin being simulated
-* VALUE: Set of actors to be simulated upon reaching the correct simulation step
-*/
-std::map<unsigned int, std::set<Actor*>> preSpawnedActors;
+
+std::map<unsigned int, std::vector<RemoteProcedureCall>> remoteProcedureCalls;
+
+
+
+
 
 
 
@@ -90,6 +89,7 @@ bufferLen : number of char's in the buffer
 void handleMessage(char* buffer, unsigned int bufferLen);
 
 
+void handleRPC(RemoteProcedureCall rpc);
 
 
 
@@ -106,20 +106,69 @@ int main()
 	std::chrono::steady_clock::time_point end;
 
 
-	float elapsedTimeSinceUpdate = 0.f;
 	while (bRunMainLoop)
 	{
 		// -- Time Management -- //	
 		end = start;
 		start = std::chrono::high_resolution_clock::now();
 		deltaTime = (start - end).count() / 1000000000.f;	// nanoseconds to seconds
-		elapsedTimeSinceUpdate += deltaTime;
+		secondsSinceLastUpdate += deltaTime;
 
-		// -- Updating Actors -- //
-		moveActors(deltaTime);
 
-		
-		// BUG: There are two actors being created when we create an actor here
+		// -- Handling RPCs -- //	TODO: This process isn't very efficient
+		std::vector<RemoteProcedureCall> uncalledRPCs;
+		if (remoteProcedureCalls.count(stateSequenceID) != 0)
+		{	// We have procedure calls that must be handled
+			
+			std::vector<RemoteProcedureCall> toCall = remoteProcedureCalls[stateSequenceID];
+
+			for (int i = 0; i < toCall.size(); i++)
+			{
+				if (toCall[i].secondsSinceLastUpdate >= secondsSinceLastUpdate)
+				{
+					handleRPC(toCall[i]);
+				}
+				else
+				{
+					uncalledRPCs.push_back(toCall[i]);
+				}
+			}
+			
+			// -- Retaining uncalled RPCS -- //
+			toCall.empty();
+
+			if (uncalledRPCs.size() != 0)
+			{
+				remoteProcedureCalls[stateSequenceID] = uncalledRPCs;
+			}
+			else
+			{
+				remoteProcedureCalls.erase(stateSequenceID); // This case avoids rechecking
+			}
+
+			//std::cout << "Handling RPCS " << remoteProcedureCalls[stateSequenceID].size() << std::endl;
+		}//~ Handling RPCs
+
+
+
+
+
+		// -- Handling Client Messages -- //
+		int numBytesRead;
+		recvBuffer = sock.recvData(numBytesRead, clientAddr);
+		if (numBytesRead > 0) // Received Anything?
+		{
+			if (recvBuffer[0] != MSG_REP)
+			{
+				std::cout << "Client::main / Handle Client Messages -- " << recvBuffer[0] << std::endl;
+			}
+			handleMessage(recvBuffer, numBytesRead);
+		}
+
+
+
+
+
 
 		// -- Checking for spawn/respawn of player characters -- //
 		auto iter = clients.begin();
@@ -132,12 +181,6 @@ int main()
 				iter->second = new Actor(Vector3D(0.f), Vector3D(0.f), ABI_PlayerCharacter);
 				actors.push_back(iter->second);
 
-				//iter->second = createActor(position, rotation);
-				//iter->second->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx");
-				// QUESTION: Why would creating an actor in this way result in a nullptr error when trying to replicate
-				//iter->second = new Actor(position, rotation);
-				//numActors++;
-				//actors[numActors] = iter->second;
 
 				// -- Sending actor ID to client -- //
 				sendBuffer[0] = MSG_ID;
@@ -155,20 +198,17 @@ int main()
 		}
 
 
-		// -- Handling Client Messages -- //
-		int numBytesRead;
-		recvBuffer = sock.recvData(numBytesRead, clientAddr);
-		if (numBytesRead > 0) // Received Anything?
-		{
-			handleMessage(recvBuffer, numBytesRead);
-		}
+
+		// -- Updating Actors -- //
+		moveActors(deltaTime);
+
 
 
 		// -- Fixed Frequency Update -- //
-		if (elapsedTimeSinceUpdate >= updatePeriod) // ~20 times a second
+		if (secondsSinceLastUpdate >= updatePeriod) // ~20 times a second
 		{
 
-			elapsedTimeSinceUpdate -= updatePeriod;
+			secondsSinceLastUpdate -= updatePeriod;
 			stateSequenceID++;
 
 			// std::cout << "Fixed update " << stateSequenceID << std::endl;
@@ -185,7 +225,6 @@ int main()
 
 			for (unsigned int i = 0; i < actors.size(); i++)
 			{
-				// Actor::serialize(tempBuffer, actors[i]);
 				ActorNetData data = actors[i]->toNetData();
 
 				// std::cout << "SENDING: " << data.Position.toString() << std::endl;
@@ -221,29 +260,42 @@ void moveActors(float deltaTime)
 		Actor* actor = actors[i];
 		actor->addToPosition(actor->getMoveDirection() * actor->getMoveSpeed() * deltaTime);
 
-
 		// std::cout << "moveActors / actor: " << i << " / " << actors[i]->getPosition().toString() << std::endl;
+		
+		bool bDestroyActor = false;
 
 		// TODO: Implement propery approach to limiting actor movement. Different types of actors will handle the edge of the screen 
 		// -- X-Boundary Checking -- //
 		if (actor->getPosition().x > 62.f) // I have no idea why this value is edge of the screen
 		{
 			actor->setPosition(Vector3D(62.f, actor->getPosition().y, actor->getPosition().z));
+			bDestroyActor = true;
 		}
 		else if (actor->getPosition().x < -62.f)
 		{
 			actor->setPosition(Vector3D(-62.f, actor->getPosition().y, actor->getPosition().z));
+			bDestroyActor = true;
 		}
 
 		// -- Y-Boundary Checking -- //
 		if (actor->getPosition().y > 50.f)
 		{
 			actor->setPosition(Vector3D(actor->getPosition().x, 50.f, actor->getPosition().z));
+			bDestroyActor = true;
 		}
 		else if (actor->getPosition().y < -50.f)
 		{
 			actor->setPosition(Vector3D(actor->getPosition().x, -50.f, actor->getPosition().z));
+			bDestroyActor = true;
 		}
+
+		// -- Destroying Actor if out of bounds -- //
+		if (bDestroyActor)
+		{
+			actors.erase(actors.begin() + i);
+			delete actor;
+		}
+
 	}
 }
 
@@ -287,7 +339,7 @@ void handleMessage(char* buffer, unsigned int bufferLen)
 			break;
 		}
 		ActorNetData netData;
-		memcpy(&netData, recvBuffer+1, sizeof(netData));
+		memcpy(&netData, buffer + 1, sizeof(netData));
 		Actor* actor = clients[ip];
 		actor->setMoveDirection(netData.moveDirection);
 		break;
@@ -298,7 +350,7 @@ void handleMessage(char* buffer, unsigned int bufferLen)
 
 		// -- Deformatting data & Spawning Actor -- // 
 		NetworkSpawnData data;
-		memcpy(&data, recvBuffer, sizeof(NetworkSpawnData));
+		memcpy(&data, buffer + 1, sizeof(NetworkSpawnData));
 
 		Actor* clientActor = clients[ip];
 		Actor* projectile = new Actor(
@@ -306,7 +358,6 @@ void handleMessage(char* buffer, unsigned int bufferLen)
 			Vector3D(1.f, 0.f, 0.f),
 			ABI_Projectile
 		);
-		//actors[numActors] = projectile;
 		actors.push_back(projectile);
 		data.networkedActorID = projectile->getId();
 
@@ -316,10 +367,42 @@ void handleMessage(char* buffer, unsigned int bufferLen)
 
 		break;
 	}
+	case MSG_RPC:
+	{
+		std::cout << "handleMessage / MSG_RPC " << std::endl;
+		RemoteProcedureCall rpc;
+		memcpy(&rpc, buffer + 1, sizeof(RemoteProcedureCall));
+		std::cout << "        " << "stateSequenceID: " << stateSequenceID << " | rpc.simulationStep" << rpc.simulationStep << std::endl;
+
+		if (rpc.simulationStep < stateSequenceID)
+		{ // This RPC call is too late to be simulated
+			printf("ERROR::handleMessage -- RPC call arrived too late\n called at step: %d\n current step: %d", rpc.simulationStep, stateSequenceID);
+			return;
+		}
+		remoteProcedureCalls[rpc.simulationStep].push_back(rpc);
+
+
+		std::cout << "handleMessage / MSG_RPC -- " << remoteProcedureCalls.size() << std::endl;
+		break;
+	}
 	case MSG_EXIT: 
 	{
 		std::cout << "handleMessage / MSG_EXIT" << std::endl;
 		bRunMainLoop = false;
+		break;
+	}
+	}
+}
+
+
+void handleRPC(RemoteProcedureCall rpc)
+{
+	std::cout << "handleRPC" << std::endl;
+	switch (rpc.method)
+	{
+	case RPC_TEST:
+	{
+		printf("handleRPC / MSG_TEST -- %s", rpc.message);
 		break;
 	}
 	}

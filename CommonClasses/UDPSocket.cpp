@@ -103,8 +103,11 @@ int UDPSocket::init(bool bIsServer)
 
 void UDPSocket::sendData(const char* buffer, unsigned int bufferLen, sockaddr_in& recvAddr)
 {
-	int bytesSent = sendto(sock, buffer, bufferLen, 0, (sockaddr*)&recvAddr, sizeof recvAddr);
-	
+	if (buffer[0] == MSG_RPC)
+	{
+		std::cout << "UDPSocket::sendData" << std::endl;
+	}
+	int bytesSent = sendto(sock, buffer, bufferLen, 0, (sockaddr*)&recvAddr, sizeof recvAddr);	
 }
 
 

@@ -1,24 +1,3 @@
-/**
-* NOTES
-* 
-* Serializing client inputs to be sent to server
-*	
-* 
-* 
-*/
-
-
-
-/*
-AAAA : modify to handle input bit and handle masking of inputs above
-
-*/
-
-
-
-
-
-
 #pragma once
 
 #include <glad/glad.h>
@@ -104,6 +83,7 @@ Actor* playerActor = nullptr;
 
 
 bool bFireButtonPressed = false;
+bool bTestButtonPressed = false;
 
 
 
@@ -112,6 +92,18 @@ unsigned int nextProxyID = 0;
 std::map<unsigned int, Actor*> unlinkedProxies;
 
 
+
+
+
+
+/* ---- Remote Procedure Calls ----
+
+KEY : Simulation Step
+VAL : Remote Procedure Calls
+
+Each value is a list of remote procedure calls to be made during a simulation step (Key).
+*/
+std::map<unsigned int, std::vector<std::function<void()>>> RemoteProcedureCalls;
 
 
 
@@ -129,7 +121,7 @@ CircularBuffer stateBuffer;
 float deltaTime = 0.f;
 float lastFrame = 0.f;
 float updatePeriod = 1.f / 20.f; // Verbose to allow easy editing. Should be properly declared later 20.f
-float elapsedTimeSinceUpdate = 0.f;
+float elapsedTimeSinceUpdate = 0.f; // Seconds
 unsigned int stateSequenceID = 0;
 
 
@@ -272,7 +264,7 @@ int main()
 			// std::cout << "Fixed update " << stateSequenceID << std::endl;
 
 
-			std::cout << "num actors : " << actorMap.size() << " , " << "num Proxies : " << unlinkedProxies.size() << std::endl;
+			// std::cout << "num actors : " << actorMap.size() << " , " << "num Proxies : " << unlinkedProxies.size() << std::endl;
 
 
 			// -- Creating New State -- //
@@ -393,17 +385,38 @@ void processInput(GLFWwindow* window)
 
 
 	// -- Actions -- //
-	if (glfwGetKey(window, GLFW_KEY_J) == GLFW_PRESS)
+	if (glfwGetKey(window, GLFW_KEY_J) == GLFW_PRESS && !bFireButtonPressed)
 	{
-		if (!bFireButtonPressed)
-		{
-			spawnProjectile();
-			bFireButtonPressed = true;
-		}
+		spawnProjectile();
+		bFireButtonPressed = true;
 	}
 	else if (glfwGetKey(window, GLFW_KEY_J) == GLFW_RELEASE)
 	{
 		bFireButtonPressed = false;
+	}
+
+
+	if (glfwGetKey(window, GLFW_KEY_T) == GLFW_PRESS && !bTestButtonPressed)
+	{
+		std::cout << "handleInput / T" << std::endl;
+		bTestButtonPressed = true;
+
+		// -- Constructing RPC -- //
+		RemoteProcedureCall rpc;
+		rpc.method = RPC_TEST;
+		rpc.secondsSinceLastUpdate = static_cast<float>(glfwGetTime()) - lastFrame;
+		rpc.simulationStep = stateSequenceID + 300;
+		memcpy(&rpc.message, "Hello World", 12);
+		
+
+		// -- Sending Message -- //
+		sendBuffer[0] = MSG_RPC;
+		memcpy(sendBuffer + 1, &rpc, sizeof(RemoteProcedureCall));
+		sock.sendData(sendBuffer, 1 + sizeof(RemoteProcedureCall), serverAddr);
+	}
+	else if (glfwGetKey(window, GLFW_KEY_T) == GLFW_RELEASE)
+	{
+		bTestButtonPressed = false;
 	}
 }
 
@@ -536,6 +549,7 @@ void handleMessage(char* buffer, unsigned int bufferLen)
 			printf("  (dummyActorID, networkedActorID) : (%d , %d)\n", data.dummyActorID, data.networkedActorID);
 			break;
 		}
+
 	}
 }
 
@@ -568,6 +582,23 @@ void replicateState(char* buffer, int bufferLen)
 	{
 		ActorNetData netData;
 		memcpy(&netData, buffer, sizeof(netData));
+
+
+
+		/* --- Handling Actor Replication ---
+		* [Client] [Server]
+		* 1 : has copy
+		* 0 : doesn't have copy
+		* 
+		* A:  [0] [1]  -->  New actor should be created
+		*		
+		* B:  [1] [1]  --> Replicate Actor state
+		*	
+		* C:  [1] [0]  --> Destroy local actor
+		*/
+
+
+
 		
 		// -- New Actor Encountered -- //
 		if (actorMap.count(netData.id) == 0)

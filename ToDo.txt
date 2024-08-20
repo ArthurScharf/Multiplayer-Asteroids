@@ -9,14 +9,45 @@
 
 
 
+
+
+1. Program state management
+	- Moving between game states effectively
+	- clearly defined states
+
+2. Retrieving the timestep from the server
+
+3. Remote Procedure calls
+	- Double check that old passed calls are being removed properly
+	- Consider making approach to storing and removing calls more efficient
+
+4. move Spawning to be an RPC
+	- Should client also receive spawn RPC? (Probably not. What we have works well enough rn)
+
+5. State comparison & Reconciliation
+
+
+
+
+
+
+
+[ ] Modify Message Sending 
+	1. Consider using enums for messages. Avoids needing to lookup which chars have already been used. Can I use a short as an Enum?
+	2. Messages are always RPCS?
+
+
+
+
+
 [ ] BUG: If somehow the reply to spawn messages reaches our client AFTER the spawned actor is replicated, we'll have problems
 
-[ ] BUG: Proxies aren't being moved correctly
-
-[ ] Make Server::actors a vector so it automatically resizes
 
 
+[ ] BUG: Spawning actors from the server is failing to remove the proxies once their server copy has begun to be replicated
 
+
+[ ] Server proxy spawns aren't being done on the correct frame. They're being done instantly
 
 
 [ ] Find a better solution for controlling the state of the program. Problematic bug when looping to get servers current state sequence ID
@@ -25,44 +56,9 @@
 
 [ ] Properly compare for state's being received from server and decide on reconciliation method
 
-[ ] Multiple actors are being spawned per a call. Mega issue
-
 [ ] Spawned client side proxies need to not use actor ID's that conflict with those used by proper actors within the system.
 
-[ ] createActorFromBlueprint doesn't cover make itself clear how it should be used. There are times where a client would like to not
-    assign a network id but will still want other features associated with calling bIsClint = true
-
-[ ] Modify ActorNetData and client spawning to allow for blueprint type to matter
-
-
-
-
------------------------------------
----------- Uncategorized ---------- 
------------------------------------
-[X] Fixed-Timestep Updates for Client and Server
-
-
-[x] Client sends server updates.
- 	[x] How to reflect changes in client state that occur between updates?
-		- SOLUTION: For movement, just rely on fixed upates and interpolation.
-
-[X] Server sends client update game state. Client copies game state
-
-
-[x] Client side interpolation
-	- For now, having the client simply move actors using it's delta time, between fixed updates is an ok solution
-
-[x] Update Server code for moving actors. Replicated movement from clients should set their actor's moveDir, not move that actor directly.
-    This way, all actors are moved using some moveActor method. Better encapsulation
-
-[x] extra data is being sent over the network each frame because sizeof(Actor) is being used where actor has
-    several data members that don't need to be serialized. This should be fixed
-	- Fixed by using ActorNetData struct. Sometimes extra data is sent, but makes the program safer
-
-( ) How does actor creation fit with the comparison of states?
-
-[ ] Client stores it's own snapshots and compares to the ones received from server when they're received
+[1/2] Client stores it's own snapshots and compares to the ones received from server when they're received
 	[ ] Client Creates and stores GameStates
 	[ ] Client properly unpacks Gamestates from server
 	[ ] Greater Consideration must be placed into what constitutes a bad comparison between states
@@ -114,10 +110,8 @@ NOTE: This feature is useful for rollback, but not the most important feature to
 
 [ ] Move the fixed update period to the dll.
 
-[ ] Client Reconciliation when prediction differs significantly from client state
 
 NOTE: The game is for LAN. At the moment, simply sending each state seems to work. We'll fry other fish first
-[ ] Implement State buffer on client
 [ ] Design Reconciliation approach for locally generated client states differ from those predicted by the server
 
 ( ) Do we need to remove the buffer consuming loop? Fixed-Updates might solve this issue
