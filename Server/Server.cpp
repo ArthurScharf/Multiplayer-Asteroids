@@ -54,8 +54,10 @@ int clientAddr_len = sizeof(clientAddr);
 std::map<IpAddress, Actor*> clients;
 unsigned int numClients = 0;
 
-Actor* actors[MAX_ACTORS]{}; // THIS SHOULD BE A VECTOR
-unsigned int numActors = 0;
+//Actor* actors[MAX_ACTORS]{}; // THIS SHOULD BE A VECTOR
+//unsigned int numActors = 0;
+
+std::vector<Actor*> actors;
 
 
 
@@ -128,7 +130,8 @@ int main()
 				printf("Creating client actor\n");
 
 				iter->second = new Actor(Vector3D(0.f), Vector3D(0.f), ABI_PlayerCharacter);
-				actors[numActors++] = iter->second;
+				actors.push_back(iter->second);
+
 				//iter->second = createActor(position, rotation);
 				//iter->second->InitializeModel("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx");
 				// QUESTION: Why would creating an actor in this way result in a nullptr error when trying to replicate
@@ -180,7 +183,7 @@ int main()
 			memcpy(sendBuffer + 1, &stateSequenceID, sizeof(unsigned int));
 			offset += sizeof(unsigned int);
 
-			for (unsigned int i = 0; i < numActors; i++)
+			for (unsigned int i = 0; i < actors.size(); i++)
 			{
 				// Actor::serialize(tempBuffer, actors[i]);
 				ActorNetData data = actors[i]->toNetData();
@@ -195,7 +198,7 @@ int main()
 			{
 				// offset is now the length of the buffer in bytes
 				clientAddr.sin_addr = it->first._in_addr;
-				sock.sendData(sendBuffer, 1 + sizeof(unsigned int) + (numActors * sizeof(ActorNetData)), clientAddr);
+				sock.sendData(sendBuffer, 1 + sizeof(unsigned int) + (actors.size() * sizeof(ActorNetData)), clientAddr);
 			}
 		}//~ Fixed Update
 
@@ -213,7 +216,7 @@ int main()
 
 void moveActors(float deltaTime)
 {
-	for (unsigned int i = 0; i < numActors; i++)
+	for (unsigned int i = 0; i < actors.size(); i++)
 	{
 		Actor* actor = actors[i];
 		actor->addToPosition(actor->getMoveDirection() * actor->getMoveSpeed() * deltaTime);
@@ -303,7 +306,8 @@ void handleMessage(char* buffer, unsigned int bufferLen)
 			Vector3D(1.f, 0.f, 0.f),
 			ABI_Projectile
 		);
-		actors[numActors++] = projectile;
+		//actors[numActors] = projectile;
+		actors.push_back(projectile);
 		data.networkedActorID = projectile->getId();
 
 		// -- Sending Reply to Client -- //
