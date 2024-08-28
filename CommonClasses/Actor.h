@@ -104,7 +104,7 @@ public:
 	* bSetModel : server doesn't render so this can be set to false
 	* _id : allows for control of the ID being set. Called by client when creating a proxy actor
 	*/
-	Actor(Vector3D _position, Vector3D _rotation, EActorBlueprintID _blueprintID = ABI_Default, bool bSetModel = false, unsigned int _id = nextId++);
+	Actor(Vector3D _position, Vector3D _rotation, EActorBlueprintID _blueprintID = ABI_Default, bool bSetModel = false, unsigned int _id = ++nextId);
 	
 	~Actor();
 

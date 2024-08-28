@@ -29,69 +29,47 @@
 
 #pragma comment(lib, "ws2_32.lib") // What is this doing?
 
+
+// ---- Rendering ----- //
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
-
-const unsigned int NUM_PACKETS_PER_CYCLE = 10;
-
-
 bool bWinsockLoaded = false;
-
-
-// Camera
+GLFWwindow* window;
 Camera camera( glm::vec3(0.f, 0.f, 100.f) ); // Camera Position
 //Camera camera(0.f, 0.f, 100.f, 0.f, 1.f, 0.f, -90.f, 0.f);
+Shader* shader;
+bool bRenderingInitialized = false;
 
 
+// ----- Networking ----- //
 UDPSocket sock;
 sockaddr_in serverAddr;
 bool bIsConnectedToServer = false;
 char sendBuffer[1 + (MAX_ACTORS * sizeof(Actor))];
 char* recvBuffer{};
 int numBytesRead = -1; // TODO: This might be a duplicate of another variable
+const unsigned int NUM_PACKETS_PER_CYCLE = 10;
 
 
 
-/* There is a playerActorID and a playerActor pointer for the following reasons
-* 
-* Actors are spawned if the client receives actor replication and an actor is discovered
-* that it hasn't yet seen.
-* When a client connects, it is added to a list of clients on the server.
-* Once the server decides to spawn the player's actor, it will send to that client the network
-* id for that actor so the client can have it.
-* Rather than require that we send actor data to all clients for each spawn, we instead
-* simply replicate the newly created actor using the normal method; server cycle by server cycle.
-* This means there exists a state where the client has a controlled actor ID, but doesn't
-* yet have that actor to control.
-* 
-* NOTE: This feels convoluted. I should think about reworking this
-*/
-
-
-
-/*
-KEY   : Actor Network ID
-VAlUE : The corresponding actor
-*/
+// ----- Actors ----- //
+// KEY : Actor Network ID	| VAlUE : The corresponding actor 
 std::map<unsigned int, Actor*> actorMap;
 // Stores network ID for actor this client is controlling. Necessary bc a client can be connected without an actor
-unsigned int playerActorID = -1;
-// Pointer to actor being controlled by this client. Avoids repeated lookups using playerActorID
+unsigned int controlledActorID;
+bool bPlayerActorIDSet = false;
+// Pointer to actor being controlled by this client. Avoids repeated lookups using controlledActorID
 Actor* playerActor = nullptr;
-
-
-
-
-bool bFireButtonPressed = false;
-bool bTestButtonPressed = false;
-
-
 
 unsigned int nextProxyID = 0;
 // Key: proxyID / Value: Proxy
 std::map<unsigned int, Actor*> unlinkedProxies;
 
 
+// ----- Input ----- //
+bool bFireButtonPressed = false;
+bool bTestButtonPressed = false;
+bool bReadyButtonPressed = false;
 
 
 
@@ -106,6 +84,8 @@ Each value is a list of remote procedure calls to be made during a simulation st
 std::map<unsigned int, std::vector<std::function<void()>>> RemoteProcedureCalls;
 
 
+
+bool bRunMainLoop = true;
 
 
 /* Stores the states created by the client at each fixed update.
@@ -126,146 +106,182 @@ unsigned int stateSequenceID = 0;
 
 
 
+// ----- Function Declarations ----- //
+void initiateConnectionLoop(); // char* sendBuffer, char* recvBuffer, int& numBytesRead
+void waitingForGameToStartLoop();
+void playingGameLoop();
 
-const std::string gearFBX_path = "C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx";
+// Initializes rendering for program, including creating a window
+int initRendering(); 
+/* Renders the game to the window */
+void Render();
 
-
-
-
-// -- Forward Declaring Functions -- //
-void initiateConnection(char* sendBuffer, char* recvBuffer, int& numBytesRead);
 void processInput(GLFWwindow* window);
 void spawnProjectile();
 void moveActors(float deltaTime); // Moves the actors locally. Lower priority actor update than the fixed updates
 void replicateState(char* buffer, int bufferLen);
 void readRecvBuffer();
-void handleMessage(char* buffer, unsigned int bufferLen);
-void terminateProgram();
+char handleMessage(char* buffer, unsigned int bufferLen); // returns message that was handled
+void cleanup();
 
+
+
+
+
+
+/*
+* CS_InitializingConnection : Allows user to specify server ip. Sends connect message and waits for reply before moving to next state
+* CS_WaitingForGameStart    : Allows user to send ready message. Cannot send ready message until client has controlled actor ID
+* 
+*/
+enum ClientState
+{
+	CS_InitializingConnection,
+	CS_WaitingForGameStart,
+	CS_PlayingGame,
+	CS_Exit
+};
+ClientState currentState;
 
 
 int main()
 {
-	// -- Initiating Connection with Server -- //
-	initiateConnection(sendBuffer, recvBuffer, numBytesRead);
+	currentState = CS_InitializingConnection;
 
-	// -- OpenGL -- //
-	glfwInit();
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-	// Creating the window 
-	GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Asteroids", NULL, NULL);
-	if (window == NULL)
+	while (bRunMainLoop)
 	{
-		std::cout << "main(): Failed to create window" << std::endl;
-		glfwTerminate();
-		return 0;
-	}
-	glfwMakeContextCurrent(window); // Why are we doing this again?
-	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-	// Checking to see if GLAD loaded
-	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+		switch (currentState)
+		{
+		case CS_InitializingConnection:
+		{
+			printf("Connecting to Server\n");
+			initiateConnectionLoop();
+			break;
+		}
+		case CS_WaitingForGameStart:
+		{
+			if (!bRenderingInitialized)
+				initRendering();
+			waitingForGameToStartLoop();
+			break;
+		}
+		case CS_PlayingGame:
+		{
+			printf("Beginning Game\n");
+			playingGameLoop();
+			break;
+		}
+		case CS_Exit:
+		{
+			printf("Exiting\n");
+			bRunMainLoop = false;
+			break;
+		}
+		}//~ Switch
+
+	}//~ While
+
+
+	// So console doesn't immediately close
+	sendBuffer[0] = MSG_EXIT;
+	sock.sendData(sendBuffer, 1, serverAddr);
+
+	cleanup();
+
+	// Prevents window from closing too quickly. Good so I can see print statements
+	char temp[200];
+	std::cin >> temp;
+
+	return 0;
+};
+
+
+
+
+
+
+void initiateConnectionLoop() // char* sendBuffer, char* recvBuffer, int& numBytesRead
+{
+	// ---- Establishing Connection ---- //
+	sock.init(false);
+	/* Properly formatting received IP address string and placing it in sockaddr_in struct */
+	serverAddr.sin_family = AF_INET;
+
+	while (currentState == CS_InitializingConnection)
 	{
-		std::cout << "Failed to initialize GLAD" << std::endl;
-		terminateProgram();
-	}
-	// OpenGL Settings
-	glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
-	glEnable(GL_DEPTH_TEST);
-	glDepthFunc(GL_LESS); // Explicitly stating the depth function to be used
-	
-	// Compiling GLSL Shaders
-	Shader shader(
-		"C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/GLSL Shaders/Vertex.txt",
-		"C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/GLSL Shaders/Fragment.txt"
-	);
+		std::cout << "Enter server IP address: ";
+		wchar_t wServerAddrStr[INET_ADDRSTRLEN];
+		std::wcin >> wServerAddrStr;
+		PCWSTR str(wServerAddrStr);
+		InetPtonW(AF_INET, str, &(serverAddr.sin_addr));
+		serverAddr.sin_port = htons(6969);
+		// -- Sending Connection Message -- //
+		// Attempt to connect several times
+		for (int i = 0; i < 5; i++)
+		{
+			// -- Sending connect message -- //
+			sendBuffer[0] = MSG_CONNECT;
+			sock.sendData(sendBuffer, 1, serverAddr);
+			
+			Sleep(500); 
 
-	// -- Loading Models -- //
-	Actor::loadModelCache(); // Initializes model cache so blueprinted actors can be created
+			// -- Receiving server reply -- //
+			recvBuffer = sock.recvData(numBytesRead, serverAddr);
+			if (numBytesRead > 0)
+			{
+				if (handleMessage(recvBuffer, numBytesRead) == MSG_CONNECT) return;
+			}
+		}//~ for i
+	}//~ While
+}
 
+void waitingForGameToStartLoop()
+{
+	printf("Space bar to ready up\n");
 
-	/*
-	// -- Retrieving Server's Most Recently Simulated Timestep -- //
-	for (int i = 0; i < 5; i++) // Arbitrary number of attempts
+	while (currentState == CS_WaitingForGameStart)
 	{
-		std::cout << "Sending MSG_TSTEP" << std::endl;
-		sendBuffer[0] = MSG_TSTEP;
-		sock.sendData(sendBuffer, 1, serverAddr);
+		// Can send MSG_STRTGM to server
+		processInput(window);
 
-		Sleep(250); // Reasonable amount of time
+		Render();
 
-		readRecvBuffer();
+		// -- Polling Events & Swapping Buffers -- //
+		glfwPollEvents();
+		glfwSwapBuffers(window);
 
-		if (stateSequenceID != 0) break;
-	}
-	// Program exiting is simple way to avoid problems. We assume that LAN will usually return 1 of 5 attempts
-	if (stateSequenceID == 0)
-	{
-		std::cout << "ERROR::main / Retrieving Server stateSequenceID -- Retrieved ID == 0" << std::endl;
-		//terminateProgram();
-	}
-	*/
+		// -- Receiving Messages -- //
+		recvBuffer = sock.recvData(numBytesRead, serverAddr);
+		if (numBytesRead == 0) continue;
+		handleMessage(recvBuffer, numBytesRead);
+	}//~ while
+}
 
-
-
-	/* glfwGetTime returns time since glfw was initialized. We want to only begin measure from the 
-	*  point at which the main loop began to run.
-	*/
+void playingGameLoop()
+{
+	/* glfwGetTime returns time since glfw was initialized. We want to only begin measure from the
+*  point at which the main loop began to run.
+*/
 	lastFrame = static_cast<float>(glfwGetTime());
 
-	// ---------- Main loop ---------- //
-	while (!glfwWindowShouldClose(window))
+	while (currentState == CS_PlayingGame)
 	{
-
 		// ---- Per-frame logic ---- //
 		float currentFrame = static_cast<float>(glfwGetTime());
 		deltaTime = currentFrame - lastFrame;
 		lastFrame = currentFrame;
 		elapsedTimeSinceUpdate += deltaTime;
 
-		// ---- Input Handling ---- //
 		processInput(window);
 		moveActors(deltaTime);
 
-		// ---- Rendering Actors ---- //
-		glClearColor(0.1f, 0.1f, 0.1f, 1.f);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-		shader.use();
-
-		glm::mat4 model = glm::mat4(1.f);
-		glm::mat4 view = glm::mat4(1.f);
-		glm::mat4 projection = glm::mat4(1.f);
-
-		model = glm::translate(model, glm::vec3(0.f));
-		shader.setMat4("model", model);
-		view = camera.GetViewMatrix();
-		shader.setMat4("view", view);
-		projection = glm::perspective(glm::radians(camera.zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.f);
-		shader.setMat4("projection", projection);
-		for (auto iter = actorMap.begin(); iter != actorMap.end(); ++iter)
-		{
-			iter->second->Draw(shader); // Actor handles setting the position offset for shader
-		}
-		for (auto iter = unlinkedProxies.begin(); iter != unlinkedProxies.end(); iter++)
-		{
-			iter->second->Draw(shader);
-		}
-
+		Render();
 
 		// ---- Fixed Frequency Update ---- //
 		if (elapsedTimeSinceUpdate >= updatePeriod)
 		{
 			elapsedTimeSinceUpdate -= updatePeriod;
 			stateSequenceID++;
-
-			// std::cout << "Fixed update " << stateSequenceID << std::endl;
-
-
-			// std::cout << "num actors : " << actorMap.size() << " , " << "num Proxies : " << unlinkedProxies.size() << std::endl;
-
 
 			// -- Creating New State -- //
 			std::vector<Actor*> actors;
@@ -278,7 +294,7 @@ int main()
 
 			if (!playerActor) continue; // BUG: Remove this to see bug
 
-			char sendBuffer[1 + sizeof(ActorNetData)]{0};
+			char sendBuffer[1 + sizeof(ActorNetData)]{ 0 };
 			sendBuffer[0] = MSG_REP;
 
 			ActorNetData data = playerActor->toNetData();
@@ -291,132 +307,184 @@ int main()
 		glfwPollEvents();
 		glfwSwapBuffers(window);
 	}//~ Main Loop
+}
 
 
 
-	// TEST
-	sendBuffer[0] = MSG_EXIT;
-	sock.sendData(sendBuffer, 1, serverAddr);
 
-	terminateProgram();
+int initRendering()
+{
+	// -- OpenGL -- //
+	glfwInit();
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-	// Prevents window from closing too quickly. Good so I can see print statements
-	char temp[200];
-	std::cin >> temp;
+	// Creating the window 
+	window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Asteroids", NULL, NULL);
+	if (window == NULL)
+	{
+		std::cout << "main(): Failed to create window" << std::endl;
+		glfwTerminate();
+		return 1;
+	}
+	glfwMakeContextCurrent(window); // Why are we doing this again?
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	// Checking to see if GLAD loaded
+	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+	{
+		std::cout << "Failed to initialize GLAD" << std::endl;
+		cleanup();
+	}
+	// OpenGL Settings
+	glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LESS); // Explicitly stating the depth function to be used
+
+
+	// Compiling GLSL Shaders
+	shader = new Shader(
+		"C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/GLSL Shaders/Vertex.txt",
+		"C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/GLSL Shaders/Fragment.txt"
+	);
+
+	// -- Loading Models -- //
+	Actor::loadModelCache(); // Initializes model cache so blueprinted actors can be created
 
 	return 0;
-};
+}
 
-/*
-* Takes input from user for game server IP.
-* Sends connect 'c'  message then waits for reply.
-* If reply isn' received in 1/4 s, take input from user again
-*/
-void initiateConnection(char* sendBuffer, char* recvBuffer, int& numBytesRead)
+void Render()
 {
-	// ---- Establishing Connection ---- //
-	sock.init(false);
-	/* Properly formatting received IP address string and placing it in sockaddr_in struct */
-	serverAddr.sin_family = AF_INET;
+	// ---- Rendering Actors ---- //
+	glClearColor(0.1f, 0.1f, 0.1f, 1.f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	while (!bIsConnectedToServer)
+	shader->use();
+
+	glm::mat4 model = glm::mat4(1.f);
+	glm::mat4 view = glm::mat4(1.f);
+	glm::mat4 projection = glm::mat4(1.f);
+
+	model = glm::translate(model, glm::vec3(0.f));
+	shader->setMat4("model", model);
+	view = camera.GetViewMatrix();
+	shader->setMat4("view", view);
+	projection = glm::perspective(glm::radians(camera.zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.f);
+	shader->setMat4("projection", projection);
+	for (auto iter = actorMap.begin(); iter != actorMap.end(); ++iter)
 	{
-		std::cout << "Enter server IP address: ";
-		wchar_t wServerAddrStr[INET_ADDRSTRLEN];
-		std::wcin >> wServerAddrStr;
-		PCWSTR str(wServerAddrStr);
-		InetPtonW(AF_INET, str, &(serverAddr.sin_addr));
-		serverAddr.sin_port = htons(6969);
-		// -- Sending Connection Message -- //
-		// Attempt to connect several times
-		for (int i = 0; i < 5; i++)
-		{
-			sendBuffer[0] = MSG_CONNECT; // Connect
-			sock.sendData(sendBuffer, 1, serverAddr);
-
-			Sleep(250); // quarter second seems reasonable
-
-			recvBuffer = sock.recvData(numBytesRead, serverAddr);
-
-			if (recvBuffer[0] = MSG_CONNECT)
-			{
-				bIsConnectedToServer = true;
-				break;
-			}
-		}
+		iter->second->Draw(*shader); // Actor handles setting the position offset for shader
+	}
+	for (auto iter = unlinkedProxies.begin(); iter != unlinkedProxies.end(); iter++)
+	{
+		iter->second->Draw(*shader);
 	}
 }
+
+
 
 
 void processInput(GLFWwindow* window)
 {
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-		glfwSetWindowShouldClose(window, true);
-	if (playerActor == nullptr) return; 
-	
-	// -- Movement -- //
-	Vector3D moveDirection(0.f);
-	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 	{
-		moveDirection += Vector3D(0.f, 1.f, 0.f);
-	}
-	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-	{
-		moveDirection += Vector3D(0.f, -1.f, 0.f);
-	}
-	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-	{
-		moveDirection += Vector3D(1.f, 0.f, 0.f);
-	}
-	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-	{
-		moveDirection += Vector3D(-1.f, 0.f, 0.f);
-	}
-	if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
-	{
-		moveDirection += Vector3D(0.f, 0.f, -1.f);
-	}
-	if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
-	{
-		moveDirection += Vector3D(0.f, 0.f, 1.f);
-	}
-	moveDirection.Normalize();
-	playerActor->setMoveDirection(moveDirection);
-
-
-	// -- Actions -- //
-	if (glfwGetKey(window, GLFW_KEY_J) == GLFW_PRESS && !bFireButtonPressed)
-	{
-		spawnProjectile();
-		bFireButtonPressed = true;
-	}
-	else if (glfwGetKey(window, GLFW_KEY_J) == GLFW_RELEASE)
-	{
-		bFireButtonPressed = false;
+		currentState = CS_Exit;
 	}
 
 
-	if (glfwGetKey(window, GLFW_KEY_T) == GLFW_PRESS && !bTestButtonPressed)
+	/*
+	* This approach to controlling input based on the state of the program could be done more cleanly
+	* by using function pointers, but the time to implement this is needlessly long for the result
+	* 
+	* NOTE: Small number of cases with Compiler optimization means I'm ok using if statements here
+	*/
+	if (currentState == CS_WaitingForGameStart)
 	{
-		std::cout << "handleInput / T" << std::endl;
-		bTestButtonPressed = true;
-
-		// -- Constructing RPC -- //
-		RemoteProcedureCall rpc;
-		rpc.method = RPC_TEST;
-		rpc.secondsSinceLastUpdate = static_cast<float>(glfwGetTime()) - lastFrame;
-		rpc.simulationStep = stateSequenceID + 300;
-		memcpy(&rpc.message, "Hello World", 12);
-		
-
-		// -- Sending Message -- //
-		sendBuffer[0] = MSG_RPC;
-		memcpy(sendBuffer + 1, &rpc, sizeof(RemoteProcedureCall));
-		sock.sendData(sendBuffer, 1 + sizeof(RemoteProcedureCall), serverAddr);
+		if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !bReadyButtonPressed && bPlayerActorIDSet)
+		{
+			printf("processInput / CS_WaitingForGameStart -- MSG_STRGM\n");
+			bReadyButtonPressed = true;
+			sendBuffer[0] = MSG_STRTGM;
+			sock.sendData(sendBuffer, 1, serverAddr);
+		}
+		else if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_RELEASE)
+		{
+			bReadyButtonPressed = false;
+		}
 	}
-	else if (glfwGetKey(window, GLFW_KEY_T) == GLFW_RELEASE)
+	else if (currentState == CS_PlayingGame)
 	{
-		bTestButtonPressed = false;
+		// Only process Movement & gameplay action input if controlling character
+		if (playerActor == nullptr)
+		{
+			return;
+		}
+
+		// -- Movement -- //
+		Vector3D moveDirection(0.f);
+		if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+		{
+			moveDirection += Vector3D(0.f, 1.f, 0.f);
+		}
+		if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+		{
+			moveDirection += Vector3D(0.f, -1.f, 0.f);
+		}
+		if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+		{
+			moveDirection += Vector3D(1.f, 0.f, 0.f);
+		}
+		if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+		{
+			moveDirection += Vector3D(-1.f, 0.f, 0.f);
+		}
+		if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
+		{
+			moveDirection += Vector3D(0.f, 0.f, -1.f);
+		}
+		if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
+		{
+			moveDirection += Vector3D(0.f, 0.f, 1.f);
+		}
+		moveDirection.Normalize();
+		playerActor->setMoveDirection(moveDirection);
+
+
+		// -- Actions -- //
+		if (glfwGetKey(window, GLFW_KEY_J) == GLFW_PRESS && !bFireButtonPressed)
+		{
+			spawnProjectile();
+			bFireButtonPressed = true;
+		}
+		else if (glfwGetKey(window, GLFW_KEY_J) == GLFW_RELEASE)
+		{
+			bFireButtonPressed = false;
+		}
+
+
+		if (glfwGetKey(window, GLFW_KEY_T) == GLFW_PRESS && !bTestButtonPressed)
+		{
+			std::cout << "handleInput / T" << std::endl;
+			bTestButtonPressed = true;
+
+			// -- Constructing RPC -- //
+			RemoteProcedureCall rpc;
+			rpc.method = RPC_TEST;
+			rpc.secondsSinceLastUpdate = static_cast<float>(glfwGetTime()) - lastFrame;
+			rpc.simulationStep = stateSequenceID + 300;
+			memcpy(&rpc.message, "Hello World", 12);
+
+
+			// -- Sending Message -- //
+			sendBuffer[0] = MSG_RPC;
+			memcpy(sendBuffer + 1, &rpc, sizeof(RemoteProcedureCall));
+			sock.sendData(sendBuffer, 1 + sizeof(RemoteProcedureCall), serverAddr);
+		}
+		else if (glfwGetKey(window, GLFW_KEY_T) == GLFW_RELEASE)
+		{
+			bTestButtonPressed = false;
+		}
 	}
 }
 
@@ -496,22 +564,39 @@ void moveActors(float deltaTime)
 }
 
 
-void handleMessage(char* buffer, unsigned int bufferLen)
+char handleMessage(char* buffer, unsigned int bufferLen)
 {
-	switch (buffer[0]) 
+	char handledMessage;
+	switch (buffer[0])
 	{
 		case MSG_CONNECT:	// Connection Reply
 		{
 			printf("handleMessage / MSG_CONNECT\n");
-			bIsConnectedToServer = true;
-			break;
+
+			ConnectAckData data;
+			memcpy(&data, recvBuffer, sizeof(ConnectAckData));
+			controlledActorID = data.controlledActorID;
+			bPlayerActorIDSet = true; 
+			printf("	/ controlledActorID: %d\n", controlledActorID);
+			currentState = CS_WaitingForGameStart;
+			return MSG_CONNECT;
+		}
+		case MSG_STRTGM:
+		{
+			printf("handleMessage / MSG_STRTGM\n");
+			StartGameData data;
+			memcpy(&data, buffer, sizeof(StartGameData));
+			stateSequenceID = 5 + data.simulationStep;
+			printf("   Received State Sequence ID : %d\n", stateSequenceID);
+			currentState = CS_PlayingGame;
+			return MSG_STRTGM;
 		}
 		case MSG_TSTEP:	// Receive current simulation step
 		{
 			memcpy(&stateSequenceID, buffer + 1, sizeof(unsigned int));
 			stateSequenceID += 5;
 			printf("handleMessage / MSG_TSTEP -- Received State Sequence ID : %d\n", stateSequenceID);
-			break;
+			return MSG_TSTEP;
 		}
 		case MSG_REP:	// Replicating
 		{
@@ -520,13 +605,14 @@ void handleMessage(char* buffer, unsigned int bufferLen)
 			*  Spawns actors that were sent to client, but don't yet exist
 			*/
 			replicateState(++buffer, --bufferLen); // TODO: Fixed update actors shouldn't be here. It should always be called and check for missing states when comparing
-			break;
+			return MSG_REP;
 		}
 		case MSG_ID:	// Receiving Controlled Actor ID
 		{
-			memcpy(&playerActorID, ++buffer, sizeof(unsigned int));
-			printf("handleMessage / MSG_ID : playerActorID: %d\n", playerActorID);
-			break;
+			memcpy(&controlledActorID, ++buffer, sizeof(unsigned int));
+			bPlayerActorIDSet = true;
+			printf("handleMessage / MSG_ID : controlledActorID: %d\n", controlledActorID);
+			return MSG_ID;
 		}
 		case MSG_SPAWN:
 		{
@@ -547,7 +633,7 @@ void handleMessage(char* buffer, unsigned int bufferLen)
 			unlinkedProxies.erase(data.dummyActorID);
 
 			printf("  (dummyActorID, networkedActorID) : (%d , %d)\n", data.dummyActorID, data.networkedActorID);
-			break;
+			return MSG_SPAWN;
 		}
 
 	}
@@ -571,9 +657,14 @@ void replicateState(char* buffer, int bufferLen)
 
 
 	// -- Creating and Copying to stateSequenceID -- //
-	unsigned int stateSequenceID = -1;
-	memcpy(&stateSequenceID, buffer, sizeof(unsigned int));
+	unsigned int receivedStateSequenceID = -1;
+	memcpy(&receivedStateSequenceID, buffer, sizeof(unsigned int));
 	buffer += sizeof(unsigned int);
+	if (stateSequenceID == 0)
+	{
+		printf("	Received State: %d\n	Set State: %d\n", receivedStateSequenceID, stateSequenceID);
+		stateSequenceID = receivedStateSequenceID + 5;
+	}
 
 
 	// -- Reading Actors -- //
@@ -582,23 +673,6 @@ void replicateState(char* buffer, int bufferLen)
 	{
 		ActorNetData netData;
 		memcpy(&netData, buffer, sizeof(netData));
-
-
-
-		/* --- Handling Actor Replication ---
-		* [Client] [Server]
-		* 1 : has copy
-		* 0 : doesn't have copy
-		* 
-		* A:  [0] [1]  -->  New actor should be created
-		*		
-		* B:  [1] [1]  --> Replicate Actor state
-		*	
-		* C:  [1] [0]  --> Destroy local actor
-		*/
-
-
-
 		
 		// -- New Actor Encountered -- //
 		if (actorMap.count(netData.id) == 0)
@@ -621,7 +695,7 @@ void replicateState(char* buffer, int bufferLen)
 			actor->setMoveSpeed(netData.moveSpeed);
 		}
 		// -- Checking to see if we've encountered the player's controlled actor -- //
-		if (netData.id == playerActorID && actor != playerActor)
+		if (netData.id == controlledActorID && playerActor == nullptr)
 		{
 			printf("Client::replicateState -- Updating playerActor\n");
 			playerActor = actor;
@@ -700,8 +774,9 @@ void readRecvBuffer()
 }
 
 
-void terminateProgram()
+void cleanup()
 {
+	printf("cleanup");
 	if (bWinsockLoaded) WSACleanup();
 	glfwTerminate();
 }

@@ -1,18 +1,79 @@
----- Game State ----
+---- Client State ----
+Attempting to initiate a connection with server
+	
+Setting up
+	- Load assets
+	- receive controlled actor
+	- receive initial world state
 
-1. Waiting for player to connect
-2. Timer starts upon first player connecting. Once timer elapses, game begins
-3. Game Begins
-4. Game loop
-	- between 1-4 players are alive at any given time. 
+	(receives data from server, replies with ACK, then shifts state)
+
+
+Game Loop
+	- Begin counting simulation steps upon first replication
+
+	(If game over message is received)
+
+
+Game End
+	- Receives Score and displays it
+	- no longer communicating with server
+
+
+
+---- Server State ----
+
+Waiting for player to connect
+	- Receiving and replying-to connect messages
+	- Initializing Player state (sending player controlled actor id. Sending world state)
+	- NOT simulating world yet. (no simulation step counter)
+	- Once first player joins, timer is set. Callback changes to next state
+
+	(Timer set upon first player connecting expires and changes to next state)
+
+
+Setting Players Up
+	- Players must load assets
+	- Players must receive their controlled actor
+	- Players must receive initial state of the world	
+
+	(Server receives ACK from each client)
+	(if all clients fail ack, close program)
+
+
+Game loop
+	- Players begin counting simulation steps upon receiving first simulation message
+		(What if first message is missing? Haven't thought about desync yet)
+	- between 1-4 players are alive at any given time
 	- Scoring & Timing is occurring
 	- Game difficulty is increasing somehow
 	- Respawn Timers are active. Players can respawn
-5. All players are dead
-6. Score is displayed and clients are disconnected
+
+	(if all players are dead, next state)
+
+Score is Sent to players
 
 
 
+
+
+
+
+
+
+----- NOTES -----
+I can have separate loops for each state
+		OR
+I can modify a single loop for each state
+
+The first option is obviously cleaner, and shouldn't present any additional computational overhead
+
+
+
+
+
+Clients must allow connection attempt before loading assets. This is a side effect of the way I have coded the program.
+Thus, loading must occur AFTER a connection is established. This is obviously a design flaw
 
 
 

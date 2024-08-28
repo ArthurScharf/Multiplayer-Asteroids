@@ -23,18 +23,6 @@
 
 
 
-/*
-* Exists so client IP's can be used as key's in a client to actor map.
-*/
-struct IpAddress
-{
-	in_addr _in_addr;
-
-	bool operator<(const IpAddress& other) const
-	{
-		return _in_addr.S_un.S_addr < other._in_addr.S_un.S_addr;
-	}
-};
 
 
 
@@ -50,25 +38,48 @@ int clientAddr_len = sizeof(clientAddr);
 
 
 
+
+// TODO: This should be in definitions
+/* Exists so client IP's can be used as key's in a client to actor map. */
+struct Client
+{
+	in_addr _in_addr;
+
+	/* Actor controlled by this client */
+	Actor* controlledActor = nullptr;
+
+	/* Is the client ready to play the game */
+	bool bIsReady = false;
+
+	bool operator<(const Client& other) const
+	{
+		return _in_addr.S_un.S_addr < other._in_addr.S_un.S_addr;
+	}
+	bool operator==(const Client& other) const { return _in_addr.S_un.S_addr == other._in_addr.S_un.S_addr; }
+};
+
 #define MAX_CLIENTS 4
-std::map<IpAddress, Actor*> clients;
-unsigned int numClients = 0;
+std::vector<Client> clients;
+unsigned int numReadyClients = 0;
+
 
 std::vector<Actor*> actors;
 
 
 
-
-
-bool bRunMainLoop = true;
+using Time = std::chrono::steady_clock;
+//using ms = std::chrono::milliseconds;
+using float_sec = std::chrono::duration<float>;
+using float_time_point = std::chrono::time_point<Time, float_sec>;
 
 float updatePeriod = 1.f / 20.f; // Verbose to allow easy editing. Should be properly declared later // 20.f
 float deltaTime = 0.f;
 float secondsSinceLastUpdate = 0.f;
 unsigned int stateSequenceID = 0;
 
-
-
+float_time_point startTime; // Time that begin-game-countdown was started
+bool bRunningStartGameTimer = false;
+int prevSecondsReached = 0; // This being here suggests we should encapsulate. Next time
 
 
 std::map<unsigned int, std::vector<RemoteProcedureCall>> remoteProcedureCalls;
@@ -76,20 +87,31 @@ std::map<unsigned int, std::vector<RemoteProcedureCall>> remoteProcedureCalls;
 
 
 
+enum ServerState
+{
+	SS_WaitingForConnections,
+	SS_PlayingGame,
+	SS_Exit
+};
+
+
+ServerState currentState = SS_WaitingForConnections;
 
 
 
-// TODO: Implement Destroy Actor
+
+
+void waitingForConnectionsLoop();
+
+void playingGameLoop();
+
 void moveActors(float deltaTime);
 
-/*
-buffer : The message as a string of data
-bufferLen : number of char's in the buffer
-*/
 void handleMessage(char* buffer, unsigned int bufferLen);
 
-
 void handleRPC(RemoteProcedureCall rpc);
+
+float_time_point getCurrentTime();
 
 
 
@@ -100,13 +122,93 @@ int main()
 	sock.init(true);
 	clientAddr.sin_family = AF_INET;
 	clientAddr.sin_port = htons(4242);
+	bool bRunMainLoop = true;
+	while (bRunMainLoop)
+	{
+		switch (currentState)
+		{
+		case SS_WaitingForConnections:
+		{
+			printf("Waiting for player Connections\n");
+			waitingForConnectionsLoop();
+			break;
+		}
+		case SS_PlayingGame:
+		{
+			printf("Beginning Game\n");
+			playingGameLoop();
+			break;
+		}
+		case SS_Exit:
+		{
+			printf("Exiting\n");
+			bRunMainLoop = false;
+			break;
+		}
+		}//~ Switch
+	}
+
+	WSACleanup();
+
+	// Prevents window from closing too quickly. Good so I can see print statements
+	char temp[200];
+	std::cin >> temp;
+
+	return 0;
+};
 
 
+
+void waitingForConnectionsLoop()
+{
+	while (currentState == SS_WaitingForConnections)
+	{
+		int numBytesRead;
+		recvBuffer = sock.recvData(numBytesRead, clientAddr);
+		if (numBytesRead > 0)
+		{
+			handleMessage(recvBuffer, numBytesRead);
+		}
+		
+		if (bRunningStartGameTimer)
+		{
+			float currentSeconds = (getCurrentTime() - startTime).count(); // Seconds difference between start of epoch and now
+			if ((int)currentSeconds > prevSecondsReached) // Truncating float
+			{
+				prevSecondsReached = currentSeconds;
+				printf("	%d\n", 2 - (int)currentSeconds);
+			}
+
+			// -- Attempt to start match -- //
+			if (currentSeconds >= 2.f)
+			{	
+				bRunningStartGameTimer = false; // Defensive programming practice. Isn't necassary
+
+				// -- Notifying clients -- //
+				StartGameData data;
+				data.simulationStep = stateSequenceID;
+				memcpy(sendBuffer, &data, sizeof(StartGameData));
+				for (auto itr = clients.begin(); itr != clients.end(); itr++)
+				{
+					clientAddr.sin_addr = itr->_in_addr;
+					sock.sendData(sendBuffer, sizeof(StartGameData), clientAddr);
+				}
+
+				// -- Changing States -- //
+				currentState = SS_PlayingGame;
+			}
+		}
+
+	}//~ Loop
+}
+
+
+void playingGameLoop()
+{
 	std::chrono::steady_clock::time_point start = std::chrono::high_resolution_clock::now();
 	std::chrono::steady_clock::time_point end;
 
-
-	while (bRunMainLoop)
+	while (currentState == SS_PlayingGame)
 	{
 		// -- Time Management -- //	
 		end = start;
@@ -115,11 +217,19 @@ int main()
 		secondsSinceLastUpdate += deltaTime;
 
 
+		int numBytesRead;
+		recvBuffer = sock.recvData(numBytesRead, clientAddr);
+		if (numBytesRead > 0)
+		{
+			handleMessage(recvBuffer, numBytesRead);
+		}
+
+
 		// -- Handling RPCs -- //	TODO: This process isn't very efficient
 		std::vector<RemoteProcedureCall> uncalledRPCs;
 		if (remoteProcedureCalls.count(stateSequenceID) != 0)
 		{	// We have procedure calls that must be handled
-			
+
 			std::vector<RemoteProcedureCall> toCall = remoteProcedureCalls[stateSequenceID];
 
 			for (int i = 0; i < toCall.size(); i++)
@@ -133,7 +243,7 @@ int main()
 					uncalledRPCs.push_back(toCall[i]);
 				}
 			}
-			
+
 			// -- Retaining uncalled RPCS -- //
 			toCall.empty();
 
@@ -145,64 +255,11 @@ int main()
 			{
 				remoteProcedureCalls.erase(stateSequenceID); // This case avoids rechecking
 			}
-
-			//std::cout << "Handling RPCS " << remoteProcedureCalls[stateSequenceID].size() << std::endl;
 		}//~ Handling RPCs
-
-
-
-
-
-		// -- Handling Client Messages -- //
-		int numBytesRead;
-		recvBuffer = sock.recvData(numBytesRead, clientAddr);
-		if (numBytesRead > 0) // Received Anything?
-		{
-			if (recvBuffer[0] != MSG_REP)
-			{
-				std::cout << "Client::main / Handle Client Messages -- " << recvBuffer[0] << std::endl;
-			}
-			handleMessage(recvBuffer, numBytesRead);
-		}
-
-
-
-
-
-
-		// -- Checking for spawn/respawn of player characters -- //
-		auto iter = clients.begin();
-		while (iter != clients.end())
-		{
-			if (iter->second == nullptr)
-			{
-				printf("Creating client actor\n");
-
-				iter->second = new Actor(Vector3D(0.f), Vector3D(0.f), ABI_PlayerCharacter);
-				actors.push_back(iter->second);
-
-
-				// -- Sending actor ID to client -- //
-				sendBuffer[0] = MSG_ID;
-				unsigned int id = iter->second->getId();
-				memcpy(sendBuffer + 1, &id, sizeof(unsigned int));
-				/* QUESTION: Why would memcpy ing using the below line result in an exception being thrown ??? */
-				//memcpy(sendBuffer + 1, (void*)clients[iter->first]->getId(), sizeof(unsigned int));
-
-				clientAddr.sin_addr = iter->first._in_addr;
-				clientAddr.sin_family = AF_INET;
-				clientAddr.sin_port = htons(4242);
-				sock.sendData(sendBuffer, 1 + sizeof(unsigned int), clientAddr);
-			}
-			iter++;
-		}
-
 
 
 		// -- Updating Actors -- //
 		moveActors(deltaTime);
-
-
 
 		// -- Fixed Frequency Update -- //
 		if (secondsSinceLastUpdate >= updatePeriod) // ~20 times a second
@@ -212,9 +269,9 @@ int main()
 			stateSequenceID++;
 
 			// std::cout << "Fixed update " << stateSequenceID << std::endl;
-		
+
 			// -- Sending Snapshot to Clients -- //
-			if (numClients <= 0) continue;
+			if (clients.size() <= 0) continue;
 
 			// - Packing actor data - //
 			sendBuffer[0] = MSG_REP;
@@ -228,7 +285,7 @@ int main()
 				ActorNetData data = actors[i]->toNetData();
 
 				// std::cout << "SENDING: " << data.Position.toString() << std::endl;
-			
+
 				memcpy(sendBuffer + 1 + sizeof(unsigned int) + (i * sizeof(ActorNetData)), &data, sizeof(ActorNetData));
 				offset += sizeof(ActorNetData);
 			}
@@ -236,21 +293,15 @@ int main()
 			for (auto it = clients.begin(); it != clients.end(); ++it)
 			{
 				// offset is now the length of the buffer in bytes
-				clientAddr.sin_addr = it->first._in_addr;
+				clientAddr.sin_addr = it->_in_addr;
 				sock.sendData(sendBuffer, 1 + sizeof(unsigned int) + (actors.size() * sizeof(ActorNetData)), clientAddr);
 			}
 		}//~ Fixed Update
 
 	};//~ Main Loop
+}
 
-	WSACleanup();
 
-	// Prevents window from closing too quickly. Good so I can see print statements
-	char temp[200];
-	std::cin >> temp;
-
-	return 0;
-};
 
 
 void moveActors(float deltaTime)
@@ -302,57 +353,107 @@ void moveActors(float deltaTime)
 
 void handleMessage(char* buffer, unsigned int bufferLen)
 {
-	IpAddress ip;
-	ip._in_addr = clientAddr.sin_addr;
+	Client client;
+	client._in_addr = clientAddr.sin_addr;
 	switch (recvBuffer[0]) // Instruction Received
 	{
-	case MSG_CONNECT: // Connect. Client wants to be added to list of connected clients
+	case MSG_CONNECT:
 	{
-		std::cout << "handleMessage / MSG_CONNECT" << std::endl;
-		clients.insert({ ip, nullptr });
-		numClients++;
+		char ipStr[INET_ADDRSTRLEN];
+		inet_ntop(AF_INET, &client._in_addr, ipStr, INET_ADDRSTRLEN);
+		printf("MSG_CONNECT -- Client IP: %s\n", ipStr);
 
-		// - replying to message - //
-		sendBuffer[0] = MSG_CONNECT;
-		sock.sendData(sendBuffer, 1, clientAddr);
+		// -- Creating Controlled Actor & Associating it with its Client -- //
+		client.controlledActor = new Actor(Vector3D(0.f), Vector3D(0.f), ABI_PlayerCharacter);
+		actors.push_back(client.controlledActor);
+		clients.push_back(client);
+
+		// -- Constructing & Sending Reply data -- //
+		char buffer[sizeof(ConnectAckData)];
+		ConnectAckData data;
+		data.controlledActorID = client.controlledActor->getId();
+		memcpy(buffer, &data, sizeof(ConnectAckData));
+		sock.sendData(buffer, sizeof(ConnectAckData), clientAddr);
+		break;
+	}
+	case MSG_STRTGM:
+	{
+		char ipStr[INET_ADDRSTRLEN];
+		inet_ntop(AF_INET, &clientAddr.sin_addr, ipStr, INET_ADDRSTRLEN);
+		printf("handleMessage / MSG_STRTGM from: %s\n", ipStr);
+
+
+		auto clientItr = std::find(clients.begin(), clients.end(), client);
+		// -- Is the sender a connected client? OR Is Client Already Ready? -- //
+		if (clientItr == clients.end())
+		{
+			std::cout << "Sender isn't a connected client" << std::endl;
+			return;
+		}
+		
+		// -- Toggling Ready Status -- //
+		numReadyClients += clientItr->bIsReady ? -1 : 1;
+		clientItr->bIsReady = !clientItr->bIsReady;
+		printf("Number of ready clients: %d\n", numReadyClients);
+
+		// -- Start or Stop Timer -- //
+		if (numReadyClients == clients.size() && !bRunningStartGameTimer)
+		{
+			bRunningStartGameTimer = true;
+			startTime = getCurrentTime();
+			printf("Game starts in...\n");
+		}
+		else
+		{
+			bRunningStartGameTimer = false;
+			prevSecondsReached = 0;
+			printf("Not all clients are ready. Stopping timer...");
+		}
 		break;
 	}
 	case MSG_TSTEP: // Request for current state sequence id or "Timestep"
 	{
-		std::cout << "handleMessage / MSG_TSTEP / Sending state sequence ID: " << stateSequenceID << std::endl;
+		std::cout << "MSG_TSTEP / Sending state sequence ID: " << stateSequenceID << std::endl;
 		sendBuffer[0] = MSG_TSTEP;
 		memcpy(sendBuffer + 1, &stateSequenceID, sizeof(unsigned int));
 		sock.sendData(sendBuffer, 1 + sizeof(unsigned int), clientAddr);
+		break;
 	}
 	case MSG_REP: // Client sending actor movement update
 	{
 		// std::cout << "handleMessage / MSG_REP" << std::endl;
 		// Receives client inputs and uses them to update the state of that client's playerActor
-		if (clients.count(ip) == 0)
+		if (clients.size() == 0)
 		{
-			std::cout << "handleMessage / MSG_REP : received replication of input from unknown client. Ignoring";
+			std::cout << "MSG_REP : received replication of input from unknown client. Ignoring";
 			break;
 		}
-		if (clients[ip] == nullptr)
-		{
-			// The client attempting to replicate has no actor to move
+		auto clientItr = std::find(clients.begin(), clients.end(), client); // Silly need to switch to an iterator since the client we created earlier isn't the same as the one that is stored
+		if (!clientItr->controlledActor)
+		{		// The client attempting to replicate has no actor to move
 			break;
 		}
 		ActorNetData netData;
 		memcpy(&netData, buffer + 1, sizeof(netData));
-		Actor* actor = clients[ip];
-		actor->setMoveDirection(netData.moveDirection);
+		clientItr->controlledActor->setMoveDirection(netData.moveDirection);
 		break;
 	}
 	case MSG_SPAWN: // Client spawned an actor.
 	{
-		std::cout << "handleMessage / MSG_SPAWN" << std::endl;
+		std::cout << "MSG_SPAWN" << std::endl;
+
+		// -- Is sender a connected client? -- //
+		auto clientItr = std::find(clients.begin(), clients.end(), client);
+		if (clientItr == clients.end())
+		{
+			printf("MSG_SPAWN / Sender isn't a connected client. Doing nothing\n");
+			return;
+		}
 
 		// -- Deformatting data & Spawning Actor -- // 
 		NetworkSpawnData data;
 		memcpy(&data, buffer + 1, sizeof(NetworkSpawnData));
-
-		Actor* clientActor = clients[ip];
+		Actor* clientActor = std::find(clients.begin(), clients.end(), client)->controlledActor;
 		Actor* projectile = new Actor(
 			clientActor->getPosition() + (clientActor->getRotation() * 100.f),
 			Vector3D(1.f, 0.f, 0.f),
@@ -369,7 +470,7 @@ void handleMessage(char* buffer, unsigned int bufferLen)
 	}
 	case MSG_RPC:
 	{
-		std::cout << "handleMessage / MSG_RPC " << std::endl;
+		std::cout << "MSG_RPC " << std::endl;
 		RemoteProcedureCall rpc;
 		memcpy(&rpc, buffer + 1, sizeof(RemoteProcedureCall));
 		std::cout << "        " << "stateSequenceID: " << stateSequenceID << " | rpc.simulationStep" << rpc.simulationStep << std::endl;
@@ -382,13 +483,13 @@ void handleMessage(char* buffer, unsigned int bufferLen)
 		remoteProcedureCalls[rpc.simulationStep].push_back(rpc);
 
 
-		std::cout << "handleMessage / MSG_RPC -- " << remoteProcedureCalls.size() << std::endl;
+		std::cout << "MSG_RPC -- " << remoteProcedureCalls.size() << std::endl;
 		break;
 	}
 	case MSG_EXIT: 
 	{
-		std::cout << "handleMessage / MSG_EXIT" << std::endl;
-		bRunMainLoop = false;
+		std::cout << "MSG_EXIT" << std::endl;
+		currentState = SS_Exit;
 		break;
 	}
 	}
@@ -407,3 +508,12 @@ void handleRPC(RemoteProcedureCall rpc)
 	}
 	}
 }
+
+
+float_time_point getCurrentTime()
+{
+	return Time::now(); // Implicitly casting
+}
+
+
+

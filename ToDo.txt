@@ -30,6 +30,12 @@
 
 
 
+[ ] Modify program to make proper use of Client struct, rather than associating information together using a map
+
+
+
+
+
 
 
 [ ] Modify Message Sending 
