@@ -53,7 +53,7 @@ const unsigned int NUM_PACKETS_PER_CYCLE = 10;
 
 
 // ----- Actors ----- //
-// KEY : Actor Network ID	| VAlUE : The corresponding actor 
+// KEY : Actor Network ID	| VALUE : The corresponding actor 
 std::map<unsigned int, Actor*> actorMap;
 // Stores network ID for actor this client is controlling. Necessary bc a client can be connected without an actor
 unsigned int controlledActorID;
@@ -111,6 +111,7 @@ void initiateConnectionLoop(); // char* sendBuffer, char* recvBuffer, int& numBy
 void waitingForGameToStartLoop();
 void playingGameLoop();
 
+
 // Initializes rendering for program, including creating a window
 int initRendering(); 
 /* Renders the game to the window */
@@ -118,6 +119,7 @@ void Render();
 
 void processInput(GLFWwindow* window);
 void spawnProjectile();
+void destroyActor(unsigned int id);
 void moveActors(float deltaTime); // Moves the actors locally. Lower priority actor update than the fixed updates
 void replicateState(char* buffer, int bufferLen);
 void readRecvBuffer();
@@ -142,6 +144,10 @@ enum ClientState
 	CS_Exit
 };
 ClientState currentState;
+
+
+
+
 
 
 int main()
@@ -178,9 +184,7 @@ int main()
 			break;
 		}
 		}//~ Switch
-
 	}//~ While
-
 
 	// So console doesn't immediately close
 	sendBuffer[0] = MSG_EXIT;
@@ -194,9 +198,6 @@ int main()
 
 	return 0;
 };
-
-
-
 
 
 
@@ -282,6 +283,8 @@ void playingGameLoop()
 		{
 			elapsedTimeSinceUpdate -= updatePeriod;
 			stateSequenceID++;
+
+			//std::cout << "Fixed Update: " << stateSequenceID << std::endl;
 
 			// -- Creating New State -- //
 			std::vector<Actor*> actors;
@@ -383,8 +386,6 @@ void Render()
 }
 
 
-
-
 void processInput(GLFWwindow* window)
 {
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
@@ -470,16 +471,14 @@ void processInput(GLFWwindow* window)
 
 			// -- Constructing RPC -- //
 			RemoteProcedureCall rpc;
-			rpc.method = RPC_TEST;
+			rpc.method = RPC_SPAWN;
 			rpc.secondsSinceLastUpdate = static_cast<float>(glfwGetTime()) - lastFrame;
-			rpc.simulationStep = stateSequenceID + 300;
+			rpc.simulationStep = stateSequenceID; // Works if We're ahead
 			memcpy(&rpc.message, "Hello World", 12);
 
-
 			// -- Sending Message -- //
-			sendBuffer[0] = MSG_RPC;
-			memcpy(sendBuffer + 1, &rpc, sizeof(RemoteProcedureCall));
-			sock.sendData(sendBuffer, 1 + sizeof(RemoteProcedureCall), serverAddr);
+			memcpy(sendBuffer, &rpc, sizeof(RemoteProcedureCall));
+			sock.sendData(sendBuffer, sizeof(RemoteProcedureCall), serverAddr);
 		}
 		else if (glfwGetKey(window, GLFW_KEY_T) == GLFW_RELEASE)
 		{
@@ -493,7 +492,7 @@ void spawnProjectile()
 {
 	if (!playerActor) return;
 
-	printf("Client::spawnProjectile\n");
+	//printf("Client::spawnProjectile\n");
 
 	/* -- NOTE -- 
 	I didn't feel like this single case for spawning a proxy deserved it's own constructor, as this would
@@ -501,26 +500,45 @@ void spawnProjectile()
 	only ever be done once */
 
 	// ---- Constructing Unlinked Proxy ---- //
-	Actor* projectile = new Actor(
-		playerActor->getPosition() + (playerActor->getRotation() * 100.f),
-		playerActor->getRotation(),
-		ABI_Projectile,
-		true,
-		nextProxyID
-	);
-	unlinkedProxies.insert({ nextProxyID, projectile });
+	//Actor* projectile = new Actor(
+	//	playerActor->getPosition() + (playerActor->getRotation() * 100.f),
+	//	playerActor->getRotation(),
+	//	ABI_Projectile,
+	//	true,
+	//	++nextProxyID
+	//);
+	//projectile->setMoveDirection(Vector3D(1.f, 0.f, 0.f));
+	//unlinkedProxies.insert({ nextProxyID, projectile });
 
 	// ---- Sending data to server ---- //
-	char buffer[sizeof(NetworkSpawnData)];
-	NetworkSpawnData data;
-	data.dummyActorID = nextProxyID;
-	data.simulationStep = stateSequenceID;
-	data.networkedActorID = 0; // The proxy's ID doesn't matter to the server
-	memcpy(buffer, &data, sizeof(NetworkSpawnData));
-	sock.sendData(buffer, 1 + sizeof(NetworkSpawnData), serverAddr);
-
-	nextProxyID++;
+	RemoteProcedureCall rpc;
+	rpc.method = RPC_SPAWN;
+	rpc.secondsSinceLastUpdate = static_cast<float>(glfwGetTime()) - lastFrame;
+	rpc.simulationStep = stateSequenceID; // Works if We're ahead
+	memcpy(sendBuffer, &rpc, sizeof(RemoteProcedureCall));
+	sock.sendData(sendBuffer, sizeof(RemoteProcedureCall), serverAddr);
 }
+
+
+
+void destroyActor(unsigned int id)
+{
+	/*
+	* 1. Must remove actor from actor map
+	* 2. Must unlink playerCharacter if destroyed actor is playerCharacter
+	*	2.1. Must handle state change if this is the case
+	*/
+
+	Actor* actor = actorMap[id];
+	actorMap.erase(id);
+	if (id == playerActor->getId())
+	{
+		playerActor = nullptr;
+	}
+
+	delete actor;
+}
+
 
 
 void moveActors(float deltaTime)
@@ -671,31 +689,32 @@ void replicateState(char* buffer, int bufferLen)
 	Actor* actor;
 	for (unsigned int i = 0; i < numActorsReceived; i++)
 	{
-		ActorNetData netData;
-		memcpy(&netData, buffer, sizeof(netData));
+		ActorNetData data;
+		memcpy(&data, buffer, sizeof(data));
 		
 		// -- New Actor Encountered -- //
-		if (actorMap.count(netData.id) == 0)
+		if (actorMap.count(data.id) == 0)
 		{
-			/*
-			* ---- DANGER ----
-			* if replication happens BEFORE spawn reply can return, We'll have two versions of the actor floating around
-			*/
-
 			// -- Add actor to map -- //
-			actor = new Actor(netData.Position, netData.Rotation, netData.blueprintID, true, netData.id);
-			actorMap[netData.id] = actor;
+			actor = new Actor(data.Position, data.Rotation, data.blueprintID, true, data.id);
+			actorMap[data.id] = actor;
+		}
+		else if (data.bIsDestroyed) // -- Actor has been destroyed on the server -- //
+		{
+			actor = nullptr; // for use after this if else block
+			destroyActor(data.id);
 		}
 		else // -- Actor found. Updating Actor data -- //
 		{
-			actor = actorMap[netData.id];
-			actor->setPosition(netData.Position);
-			actor->setRotation(netData.Rotation);
-			actor->setMoveDirection(netData.moveDirection);
-			actor->setMoveSpeed(netData.moveSpeed);
+			actor = actorMap[data.id];
+			actor->setPosition(data.Position);
+			actor->setRotation(data.Rotation);
+			actor->setMoveDirection(data.moveDirection);
+			actor->setMoveSpeed(data.moveSpeed);
 		}
+
 		// -- Checking to see if we've encountered the player's controlled actor -- //
-		if (netData.id == controlledActorID && playerActor == nullptr)
+		if (data.id == controlledActorID && playerActor == nullptr)
 		{
 			printf("Client::replicateState -- Updating playerActor\n");
 			playerActor = actor;

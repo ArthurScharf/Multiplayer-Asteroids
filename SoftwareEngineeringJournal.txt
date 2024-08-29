@@ -3,3 +3,11 @@ We want to guarantee that both programs will apply the same transformation to th
 
 
 
+
+
+
+
+
+---- Choosing a Container ----
+Will I need to modify the objects in this container while iterating?
+

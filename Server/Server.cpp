@@ -33,7 +33,7 @@ char sendBuffer[1 + sizeof(unsigned int) + (MAX_ACTORS * sizeof(Actor))]{};
 char* recvBuffer{};
 sockaddr_in clientAddr;
 int clientAddr_len = sizeof(clientAddr);
-
+const unsigned int NUM_PACKETS_PER_CYCLE = 50;
 
 
 
@@ -64,6 +64,15 @@ unsigned int numReadyClients = 0;
 
 
 std::vector<Actor*> actors;
+
+/* Stores the asteroids. Used to look for collision between player and asteroid */
+std::set<Actor*> asteroids; 
+
+/* Stores net data for all actors during the interval between the previous fixed update and the current update.
+*  Moved here from `actors` upon destruction being flagged. Actor is no longer included in gameplay processing or rendering.
+*  Upon next fixed update, all of these are used to generate a respective ActorNetData, which is used by clients to destroy their proxies
+*/
+std::vector<ActorNetData> actorsDestroyedThisUpdate;
 
 
 
@@ -106,6 +115,10 @@ void waitingForConnectionsLoop();
 void playingGameLoop();
 
 void moveActors(float deltaTime);
+
+void checkForCollisions();
+
+void readRecvBuffer();
 
 void handleMessage(char* buffer, unsigned int bufferLen);
 
@@ -210,68 +223,78 @@ void playingGameLoop()
 
 	while (currentState == SS_PlayingGame)
 	{
-		// -- Time Management -- //	
+		// ---- Time Management ---- //	
 		end = start;
 		start = std::chrono::high_resolution_clock::now();
 		deltaTime = (start - end).count() / 1000000000.f;	// nanoseconds to seconds
 		secondsSinceLastUpdate += deltaTime;
 
 
-		int numBytesRead;
-		recvBuffer = sock.recvData(numBytesRead, clientAddr);
-		if (numBytesRead > 0)
-		{
-			handleMessage(recvBuffer, numBytesRead);
-		}
+		// ---- Receiving Messages ---- //
+		readRecvBuffer(); // Reads NUM_PACKETS_PER_CYCLE worth of messages
+		
 
 
-		// -- Handling RPCs -- //	TODO: This process isn't very efficient
-		std::vector<RemoteProcedureCall> uncalledRPCs;
+		// ---- Handling RPCs ---- //
 		if (remoteProcedureCalls.count(stateSequenceID) != 0)
-		{	// We have procedure calls that must be handled
-
+		{
+			// -- Getting RPC's for this update -- //
 			std::vector<RemoteProcedureCall> toCall = remoteProcedureCalls[stateSequenceID];
-
-			for (int i = 0; i < toCall.size(); i++)
+			if (toCall.size())
 			{
-				if (toCall[i].secondsSinceLastUpdate >= secondsSinceLastUpdate)
+				std::cout << "Handling RPCs / # RPCS to Call: " << toCall.size() << std::endl;
+			}
+
+			auto rpcItr = toCall.begin();
+			while (rpcItr != toCall.end())
+			{
+				if (rpcItr->secondsSinceLastUpdate <= secondsSinceLastUpdate)
 				{
-					handleRPC(toCall[i]);
+					handleRPC(*rpcItr);
+					rpcItr = toCall.erase(rpcItr); // iterator is set to next value
+					continue;
 				}
-				else
-				{
-					uncalledRPCs.push_back(toCall[i]);
-				}
+				rpcItr++;
 			}
-
-			// -- Retaining uncalled RPCS -- //
-			toCall.empty();
-
-			if (uncalledRPCs.size() != 0)
-			{
-				remoteProcedureCalls[stateSequenceID] = uncalledRPCs;
-			}
-			else
-			{
-				remoteProcedureCalls.erase(stateSequenceID); // This case avoids rechecking
-			}
-		}//~ Handling RPCs
+		}//~ handling RPCs
 
 
 		// -- Updating Actors -- //
 		moveActors(deltaTime);
+		checkForCollisions();
+
 
 		// -- Fixed Frequency Update -- //
 		if (secondsSinceLastUpdate >= updatePeriod) // ~20 times a second
 		{
-
 			secondsSinceLastUpdate -= updatePeriod;
 			stateSequenceID++;
 
+
+
+			// TODO: better spawning procedure
+			// ---- Spawning Asteroids ---- //
+			if ((stateSequenceID % 40) == 0)
+			{	// Spawn Asteroid
+				Actor* asteroid = new Actor(
+					Vector3D(0.f, 50.f, 25.f),
+					Vector3D(0.f, -1.f, 0.f),
+					ABI_Asteroid,
+					false
+				);
+				actors.push_back(asteroid);
+				asteroids.insert(asteroid);
+			};
+
+
+
+
 			// std::cout << "Fixed update " << stateSequenceID << std::endl;
 
+
+
 			// -- Sending Snapshot to Clients -- //
-			if (clients.size() <= 0) continue;
+			if (clients.size() <= 0) return;
 
 			// - Packing actor data - //
 			sendBuffer[0] = MSG_REP;
@@ -280,6 +303,7 @@ void playingGameLoop()
 			memcpy(sendBuffer + 1, &stateSequenceID, sizeof(unsigned int));
 			offset += sizeof(unsigned int);
 
+			// ActorNetData* actorData = (ActorNetData*)malloc( (actors.size() + actorsDestroyedThisUpdate.size()) * sizeof(ActorNetData));
 			for (unsigned int i = 0; i < actors.size(); i++)
 			{
 				ActorNetData data = actors[i]->toNetData();
@@ -289,12 +313,17 @@ void playingGameLoop()
 				memcpy(sendBuffer + 1 + sizeof(unsigned int) + (i * sizeof(ActorNetData)), &data, sizeof(ActorNetData));
 				offset += sizeof(ActorNetData);
 			}
+			for (unsigned int i = 0; i < actorsDestroyedThisUpdate.size(); i++)
+			{
+				memcpy(sendBuffer + offset, &actorsDestroyedThisUpdate[i], sizeof(ActorNetData));
+				offset += sizeof(ActorNetData);
+			}
 			// - Sending Actor data - //
 			for (auto it = clients.begin(); it != clients.end(); ++it)
 			{
 				// offset is now the length of the buffer in bytes
 				clientAddr.sin_addr = it->_in_addr;
-				sock.sendData(sendBuffer, 1 + sizeof(unsigned int) + (actors.size() * sizeof(ActorNetData)), clientAddr);
+				sock.sendData(sendBuffer, offset, clientAddr);
 			}
 		}//~ Fixed Update
 
@@ -303,7 +332,7 @@ void playingGameLoop()
 
 
 
-
+// TODO: Iter
 void moveActors(float deltaTime)
 {
 	for (unsigned int i = 0; i < actors.size(); i++)
@@ -350,6 +379,57 @@ void moveActors(float deltaTime)
 	}
 }
 
+
+// This entire function is hot garbage 
+void checkForCollisions()
+{
+	auto clientItr = clients.begin();
+	while ( clientItr != clients.end() )
+	{
+		auto asteroidItr = asteroids.begin();
+		while (asteroidItr != asteroids.end())
+		{
+
+			// -- Checking for Collision -- //
+			Vector3D v1 = clientItr->controlledActor->getPosition();
+			Vector3D v2 = (*asteroidItr)->getPosition(); // Weird derefernce bc we're storing pointers while using iterators
+			v1.z = v2.z = 0.f; // Height is just cosmetic
+			if ((v1 - v2).length() <= 20.f)
+			{
+				// -- Modifying client controlled actor -- //
+				ActorNetData clientActorData = clientItr->controlledActor->toNetData();
+				clientActorData.bIsDestroyed = true;
+				actorsDestroyedThisUpdate.push_back(clientActorData);
+				actors.erase(std::find(actors.begin(), actors.end(), clientItr->controlledActor));
+				clientItr->controlledActor = nullptr;
+				clientItr++;
+
+				ActorNetData asteroidNetData = (*asteroidItr)->toNetData();
+				asteroidNetData.bIsDestroyed = true;
+				actorsDestroyedThisUpdate.push_back(asteroidNetData);
+				actors.erase(std::find(actors.begin(), actors.end(), *asteroidItr));
+				asteroidItr = asteroids.erase(asteroidItr);
+				continue; 
+			}
+			asteroidItr++;
+		}
+		clientItr++;
+	}
+}
+
+
+void readRecvBuffer()
+{
+	// ----  Receiving Data from Clients ----  //
+	int recvBufferLen = 0;
+	sockaddr_in recvAddr; // This is never used on purpose. Code smell
+	for (int i = 0; i < NUM_PACKETS_PER_CYCLE; i++)
+	{
+		
+		recvBuffer = sock.recvData(recvBufferLen, clientAddr);
+		handleMessage(recvBuffer, recvBufferLen);
+	}
+}
 
 void handleMessage(char* buffer, unsigned int bufferLen)
 {
@@ -472,8 +552,8 @@ void handleMessage(char* buffer, unsigned int bufferLen)
 	{
 		std::cout << "MSG_RPC " << std::endl;
 		RemoteProcedureCall rpc;
-		memcpy(&rpc, buffer + 1, sizeof(RemoteProcedureCall));
-		std::cout << "        " << "stateSequenceID: " << stateSequenceID << " | rpc.simulationStep" << rpc.simulationStep << std::endl;
+		memcpy(&rpc, buffer, sizeof(RemoteProcedureCall));
+		std::cout << "        " << "stateSequenceID: " << stateSequenceID << " | rpc.simulationStep: " << rpc.simulationStep << std::endl;
 
 		if (rpc.simulationStep < stateSequenceID)
 		{ // This RPC call is too late to be simulated
@@ -481,7 +561,6 @@ void handleMessage(char* buffer, unsigned int bufferLen)
 			return;
 		}
 		remoteProcedureCalls[rpc.simulationStep].push_back(rpc);
-
 
 		std::cout << "MSG_RPC -- " << remoteProcedureCalls.size() << std::endl;
 		break;
@@ -499,13 +578,31 @@ void handleMessage(char* buffer, unsigned int bufferLen)
 void handleRPC(RemoteProcedureCall rpc)
 {
 	std::cout << "handleRPC" << std::endl;
+
+	Client client;
+	client._in_addr = clientAddr.sin_addr;
 	switch (rpc.method)
 	{
-	case RPC_TEST:
-	{
-		printf("handleRPC / MSG_TEST -- %s", rpc.message);
-		break;
-	}
+		case RPC_SPAWN:
+		{
+			// -- Spawning Actor -- // 
+			Actor* clientActor = std::find(clients.begin(), clients.end(), client)->controlledActor;
+
+			if (!clientActor)
+			{
+				printf("ERROR::handleRPC -- clientActor == nullptr\n");
+				return;
+			}
+
+			Actor* projectile = new Actor(
+				clientActor->getPosition() + (clientActor->getRotation() * 100.f),
+				Vector3D(1.f, 0.f, 0.f),
+				ABI_Asteroid,
+				false
+			);
+			actors.push_back(projectile);
+			break;
+		}
 	}
 }
 

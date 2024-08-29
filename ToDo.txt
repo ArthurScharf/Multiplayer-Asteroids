@@ -1,3 +1,22 @@
+Move Destroyed Actors from active collections (collections where actors that are alive are)
+
+Append doomed actors' ActorNetData to state update
+
+Destroy doomed actors during fixed update
+
+
+
+
+// TODO: Iter
+
+
+
+
+
+
+
+
+
 
 
 ----------  KEY ---------- 
@@ -11,18 +30,21 @@
 
 
 
-1. Program state management
+[X] 1. Program state management				
 	- Moving between game states effectively
 	- clearly defined states
 
-2. Retrieving the timestep from the server
+[X] 2. Retrieving the timestep from the server
+
 
 3. Remote Procedure calls
 	- Double check that old passed calls are being removed properly
 	- Consider making approach to storing and removing calls more efficient
 
+
 4. move Spawning to be an RPC
 	- Should client also receive spawn RPC? (Probably not. What we have works well enough rn)
+
 
 5. State comparison & Reconciliation
 
