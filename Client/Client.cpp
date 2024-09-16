@@ -27,6 +27,7 @@
 
 
 
+
 #pragma comment(lib, "ws2_32.lib") // What is this doing?
 
 
@@ -144,8 +145,6 @@ enum ClientState
 	CS_Exit
 };
 ClientState currentState;
-
-
 
 
 
@@ -311,6 +310,8 @@ void playingGameLoop()
 		glfwSwapBuffers(window);
 	}//~ Main Loop
 }
+
+
 
 
 
@@ -523,19 +524,15 @@ void spawnProjectile()
 
 void destroyActor(unsigned int id)
 {
-	/*
-	* 1. Must remove actor from actor map
-	* 2. Must unlink playerCharacter if destroyed actor is playerCharacter
-	*	2.1. Must handle state change if this is the case
-	*/
+	std::cout << "destroy actor\n";
+
 
 	Actor* actor = actorMap[id];
 	actorMap.erase(id);
-	if (id == playerActor->getId())
+	if (playerActor && id == playerActor->getId())
 	{
 		playerActor = nullptr;
 	}
-
 	delete actor;
 }
 
@@ -686,23 +683,22 @@ void replicateState(char* buffer, int bufferLen)
 
 
 	// -- Reading Actors -- //
-	Actor* actor;
+	Actor* actor = nullptr;
 	for (unsigned int i = 0; i < numActorsReceived; i++)
 	{
 		ActorNetData data;
 		memcpy(&data, buffer, sizeof(data));
 		
-		// -- New Actor Encountered -- //
-		if (actorMap.count(data.id) == 0)
+		
+		if (data.bIsDestroyed) // -- Actor has been destroyed on the server -- //
+		{
+			destroyActor(data.id);
+		}
+		else if (actorMap.count(data.id) == 0) // -- New Actor Encountered -- //
 		{
 			// -- Add actor to map -- //
 			actor = new Actor(data.Position, data.Rotation, data.blueprintID, true, data.id);
 			actorMap[data.id] = actor;
-		}
-		else if (data.bIsDestroyed) // -- Actor has been destroyed on the server -- //
-		{
-			actor = nullptr; // for use after this if else block
-			destroyActor(data.id);
 		}
 		else // -- Actor found. Updating Actor data -- //
 		{

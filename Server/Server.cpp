@@ -24,9 +24,6 @@
 
 
 
-
-
-
 UDPSocket sock;
 // I doubt any other kind of message will exceed the size of this type of message
 char sendBuffer[1 + sizeof(unsigned int) + (MAX_ACTORS * sizeof(Actor))]{};
@@ -69,10 +66,10 @@ std::vector<Actor*> actors;
 std::set<Actor*> asteroids; 
 
 /* Stores net data for all actors during the interval between the previous fixed update and the current update.
-*  Moved here from `actors` upon destruction being flagged. Actor is no longer included in gameplay processing or rendering.
+*  Actor's net data is stored here before being deleted. 
 *  Upon next fixed update, all of these are used to generate a respective ActorNetData, which is used by clients to destroy their proxies
 */
-std::vector<ActorNetData> actorsDestroyedThisUpdate;
+std::vector<ActorNetData> actorsDestroyedThisUpdate = {};
 
 
 
@@ -223,6 +220,9 @@ void playingGameLoop()
 
 	while (currentState == SS_PlayingGame)
 	{
+		printf("%d / %d\n", actorsDestroyedThisUpdate.size(), actors.size());
+
+
 		// ---- Time Management ---- //	
 		end = start;
 		start = std::chrono::high_resolution_clock::now();
@@ -261,7 +261,7 @@ void playingGameLoop()
 
 		// -- Updating Actors -- //
 		moveActors(deltaTime);
-		checkForCollisions();
+		checkForCollisions(); // Potentially pushes actors onto `actorsDestroyedThisUpdate`
 
 
 		// -- Fixed Frequency Update -- //
@@ -270,12 +270,10 @@ void playingGameLoop()
 			secondsSinceLastUpdate -= updatePeriod;
 			stateSequenceID++;
 
-
-
-			// TODO: better spawning procedure
 			// ---- Spawning Asteroids ---- //
 			if ((stateSequenceID % 40) == 0)
 			{	// Spawn Asteroid
+				// std::cout << "TEST" << std::endl;
 				Actor* asteroid = new Actor(
 					Vector3D(0.f, 50.f, 25.f),
 					Vector3D(0.f, -1.f, 0.f),
@@ -285,13 +283,8 @@ void playingGameLoop()
 				actors.push_back(asteroid);
 				asteroids.insert(asteroid);
 			};
-
-
-
-
-			// std::cout << "Fixed update " << stateSequenceID << std::endl;
-
-
+			//std::cout << actors.size() << std::endl;
+			//std::cout << asteroids.size() << std::endl;
 
 			// -- Sending Snapshot to Clients -- //
 			if (clients.size() <= 0) return;
@@ -303,17 +296,14 @@ void playingGameLoop()
 			memcpy(sendBuffer + 1, &stateSequenceID, sizeof(unsigned int));
 			offset += sizeof(unsigned int);
 
-			// ActorNetData* actorData = (ActorNetData*)malloc( (actors.size() + actorsDestroyedThisUpdate.size()) * sizeof(ActorNetData));
-			for (unsigned int i = 0; i < actors.size(); i++)
+			for (unsigned int i = 0; i < actors.size(); i++) // Iterating Actors
 			{
 				ActorNetData data = actors[i]->toNetData();
-
-				// std::cout << "SENDING: " << data.Position.toString() << std::endl;
 
 				memcpy(sendBuffer + 1 + sizeof(unsigned int) + (i * sizeof(ActorNetData)), &data, sizeof(ActorNetData));
 				offset += sizeof(ActorNetData);
 			}
-			for (unsigned int i = 0; i < actorsDestroyedThisUpdate.size(); i++)
+			for (unsigned int i = 0; i < actorsDestroyedThisUpdate.size(); i++) // Iterating data from destroyed actors
 			{
 				memcpy(sendBuffer + offset, &actorsDestroyedThisUpdate[i], sizeof(ActorNetData));
 				offset += sizeof(ActorNetData);
@@ -325,6 +315,13 @@ void playingGameLoop()
 				clientAddr.sin_addr = it->_in_addr;
 				sock.sendData(sendBuffer, offset, clientAddr);
 			}
+
+			// -- Clearing Actors Destroyed from This Update -- //
+			if (actorsDestroyedThisUpdate.size() > 0)
+			{
+				std::cout << "clear" << std::endl;
+				actorsDestroyedThisUpdate.clear();
+			}
 		}//~ Fixed Update
 
 	};//~ Main Loop
@@ -332,7 +329,7 @@ void playingGameLoop()
 
 
 
-// TODO: Iter
+// TODO: BUG: since I'm modifying the array while iterating (doing so with indices), this will create issues
 void moveActors(float deltaTime)
 {
 	for (unsigned int i = 0; i < actors.size(); i++)
@@ -372,10 +369,13 @@ void moveActors(float deltaTime)
 		// -- Destroying Actor if out of bounds -- //
 		if (bDestroyActor)
 		{
-			actors.erase(actors.begin() + i);
+			//std::cout << "moveActor / Destroying\n";
+			actors.erase(actors.begin() + i);		
+			ActorNetData data = actor->toNetData();
+			data.bIsDestroyed = true;
+			actorsDestroyedThisUpdate.push_back(data);
 			delete actor;
 		}
-
 	}
 }
 
@@ -386,34 +386,51 @@ void checkForCollisions()
 	auto clientItr = clients.begin();
 	while ( clientItr != clients.end() )
 	{
+		if (!clientItr->controlledActor)
+		{
+			clientItr++;
+			continue;
+		}
 		auto asteroidItr = asteroids.begin();
 		while (asteroidItr != asteroids.end())
 		{
-
-			// -- Checking for Collision -- //
+			// -- Checking for Collision between Client Actor & any Asteroid -- //
 			Vector3D v1 = clientItr->controlledActor->getPosition();
-			Vector3D v2 = (*asteroidItr)->getPosition(); // Weird derefernce bc we're storing pointers while using iterators
+			Vector3D v2 = (*asteroidItr)->getPosition(); // Wierd dereference bc we're storing pointers while using iterators
 			v1.z = v2.z = 0.f; // Height is just cosmetic
-			if ((v1 - v2).length() <= 20.f)
+			if ((v1 - v2).length() <= 20.f) 
 			{
-				// -- Modifying client controlled actor -- //
+				// -- Updating actorsDestroyedThisUpdate -- //
 				ActorNetData clientActorData = clientItr->controlledActor->toNetData();
-				clientActorData.bIsDestroyed = true;
+				clientActorData.bIsDestroyed = true; // Queueing the actor to be destroyed later
 				actorsDestroyedThisUpdate.push_back(clientActorData);
-				actors.erase(std::find(actors.begin(), actors.end(), clientItr->controlledActor));
-				clientItr->controlledActor = nullptr;
-				clientItr++;
 
 				ActorNetData asteroidNetData = (*asteroidItr)->toNetData();
 				asteroidNetData.bIsDestroyed = true;
 				actorsDestroyedThisUpdate.push_back(asteroidNetData);
-				actors.erase(std::find(actors.begin(), actors.end(), *asteroidItr));
-				asteroidItr = asteroids.erase(asteroidItr);
-				continue; 
+
+				// -- Removing Destroyed Actors from Actor & Deleting them -- //
+				auto controlledActorItr = std::find(actors.begin(), actors.end(), clientItr->controlledActor);
+				if (controlledActorItr != actors.end())
+				{
+					actors.erase(controlledActorItr);
+					delete clientItr->controlledActor;
+					clientItr->controlledActor = nullptr;
+				}
+				clientItr++; // This client has been destroyed. We must increment
+
+				auto asteroidFromVector = std::find(actors.begin(), actors.end(), *asteroidItr);
+				if (asteroidFromVector != actors.end())
+				{
+					actors.erase(asteroidFromVector);
+					delete (*asteroidItr);
+					asteroidItr = asteroids.erase(asteroidItr); // Increments the iterator. We can continue to skip the increment operation immediately after this if-body
+					continue;
+				}
 			}
 			asteroidItr++;
 		}
-		clientItr++;
+		if (clientItr != clients.end()) clientItr++;
 	}
 }
 

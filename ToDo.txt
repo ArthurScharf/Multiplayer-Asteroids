@@ -1,14 +1,4 @@
-Move Destroyed Actors from active collections (collections where actors that are alive are)
-
-Append doomed actors' ActorNetData to state update
-
 Destroy doomed actors during fixed update
-
-
-
-
-// TODO: Iter
-
 
 
 
