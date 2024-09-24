@@ -386,22 +386,22 @@ void moveActors(float deltaTime)
 }
 
 
-// This entire function is hot garbage 
+
 void checkForCollisions()
 {
-	auto clientItr = clients.begin();
+	std::vector<Client>::iterator clientItr = clients.begin();
 	while ( clientItr != clients.end() )
 	{
-		if (!clientItr->controlledActor)
+		if (!clientItr->controlledActor) // Skips clients that aren't controlling anything
 		{
 			clientItr++;
 			continue;
 		}
-		auto asteroidItr = asteroids.begin();
+		std::set<Actor*>::iterator asteroidItr = asteroids.begin();
 		while (asteroidItr != asteroids.end())
 		{
 			// -- Checking for Collision between Client Actor & any Asteroid -- //
-			Vector3D v1 = clientItr->controlledActor->getPosition();
+			Vector3D v1 = clientItr->controlledActor->getPosition();	// BUG: This can sometimes be pointing to end() while it's being dereferenced
 			Vector3D v2 = (*asteroidItr)->getPosition(); // Wierd dereference bc we're storing pointers while using iterators
 			v1.z = v2.z = 0.f; // Height is just cosmetic
 			if ((v1 - v2).length() <= 20.f) 
@@ -417,27 +417,27 @@ void checkForCollisions()
 
 				// -- Removing Destroyed Actors from Actor & Deleting them -- //
 				auto controlledActorItr = std::find(actors.begin(), actors.end(), clientItr->controlledActor);
-				if (controlledActorItr != actors.end())
-				{
-					actors.erase(controlledActorItr);
-					delete clientItr->controlledActor;
-					clientItr->controlledActor = nullptr;
-				}
-				clientItr++; // This client has been destroyed. We must increment
+				actors.erase(controlledActorItr);
+				delete clientItr->controlledActor;
+				clientItr->controlledActor = nullptr;
 
 				auto asteroidFromVector = std::find(actors.begin(), actors.end(), *asteroidItr);
-				if (asteroidFromVector != actors.end())
-				{
-					actors.erase(asteroidFromVector);
-					delete (*asteroidItr);
-					asteroidItr = asteroids.erase(asteroidItr); // Increments the iterator. We can continue to skip the increment operation immediately after this if-body
-					continue;
-				}
+				actors.erase(asteroidFromVector);
+				delete (*asteroidItr);
+				asteroidItr = asteroids.erase(asteroidItr); // Increments the iterator
+				
+				/*
+				* We've destroyed the current client actor so it is pointless to continue to 
+				* to compare more asteroids to it.
+				* Thus, we leave the asteroid loop, and repeat the process for the next
+				* actor-controlling client
+				*/
+				break;
 			}
-			asteroidItr++;
-		}
-		if (clientItr != clients.end()) clientItr++;
-	}
+			asteroidItr++; // This occurs only if an asteroid hasn't been destroyed
+		}//~ Asteroid loop
+		clientItr++;
+	}//~ Client loop
 }
 
 
