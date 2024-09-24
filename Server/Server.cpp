@@ -62,6 +62,8 @@ unsigned int numReadyClients = 0;
 
 std::vector<Actor*> actors;
 
+
+
 /* Stores the asteroids. Used to look for collision between player and asteroid */
 std::set<Actor*> asteroids; 
 
@@ -220,7 +222,7 @@ void playingGameLoop()
 
 	while (currentState == SS_PlayingGame)
 	{
-		printf("%d / %d\n", actorsDestroyedThisUpdate.size(), actors.size());
+		// printf("%d / %d\n", actorsDestroyedThisUpdate.size(), actors.size());
 
 
 		// ---- Time Management ---- //	
@@ -236,25 +238,30 @@ void playingGameLoop()
 
 
 		// ---- Handling RPCs ---- //
-		if (remoteProcedureCalls.count(stateSequenceID) != 0)
+		if (remoteProcedureCalls.count(stateSequenceID) != 0) // Counts number of elements with specified key
 		{
 			// -- Getting RPC's for this update -- //
-			std::vector<RemoteProcedureCall> toCall = remoteProcedureCalls[stateSequenceID];
-			if (toCall.size())
-			{
-				std::cout << "Handling RPCs / # RPCS to Call: " << toCall.size() << std::endl;
-			}
+			
+			std::cout << stateSequenceID << "/ Handling RPCs / # RPCS to Call: " << remoteProcedureCalls[stateSequenceID].size() << std::endl;
 
-			auto rpcItr = toCall.begin();
-			while (rpcItr != toCall.end())
+			auto rpcItr = remoteProcedureCalls[stateSequenceID].begin();
+			while (rpcItr != remoteProcedureCalls[stateSequenceID].end())
 			{
-				if (rpcItr->secondsSinceLastUpdate <= secondsSinceLastUpdate)
-				{
-					handleRPC(*rpcItr);
-					rpcItr = toCall.erase(rpcItr); // iterator is set to next value
-					continue;
-				}
-				rpcItr++;
+				handleRPC(*rpcItr);
+				rpcItr = remoteProcedureCalls[stateSequenceID].erase(rpcItr); // iterator is set to next value
+
+				//if (rpcItr->secondsSinceLastUpdate >= secondsSinceLastUpdate)
+				//{
+				//	handleRPC(*rpcItr);
+				//	rpcItr = toCall->erase(rpcItr); // iterator is set to next value
+				//	continue;
+				//}
+				//rpcItr++;
+			}
+			// Removing the RPC list for this state if it's empty
+			if (remoteProcedureCalls[stateSequenceID].empty())
+			{
+				remoteProcedureCalls.erase(stateSequenceID);
 			}
 		}//~ handling RPCs
 
@@ -369,7 +376,6 @@ void moveActors(float deltaTime)
 		// -- Destroying Actor if out of bounds -- //
 		if (bDestroyActor)
 		{
-			//std::cout << "moveActor / Destroying\n";
 			actors.erase(actors.begin() + i);		
 			ActorNetData data = actor->toNetData();
 			data.bIsDestroyed = true;
@@ -447,6 +453,7 @@ void readRecvBuffer()
 		handleMessage(recvBuffer, recvBufferLen);
 	}
 }
+
 
 void handleMessage(char* buffer, unsigned int bufferLen)
 {
@@ -614,7 +621,7 @@ void handleRPC(RemoteProcedureCall rpc)
 			Actor* projectile = new Actor(
 				clientActor->getPosition() + (clientActor->getRotation() * 100.f),
 				Vector3D(1.f, 0.f, 0.f),
-				ABI_Asteroid,
+				ABI_Projectile,
 				false
 			);
 			actors.push_back(projectile);
