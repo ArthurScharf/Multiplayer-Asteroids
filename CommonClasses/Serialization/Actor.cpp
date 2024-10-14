@@ -20,8 +20,8 @@ void Actor::loadModelCache()
 	std::cout << "Actor::loadModelCache -- \"Player Character\" loaded" << std::endl;
 	modelCache[numCachedModels++] = new Model("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Asteroid/Asteroid.fbx");
 	std::cout << "Actor::loadModelCache -- \"Asteroid\" loaded" << std::endl;
-	//modelCache[numCachedModels++] = new Model("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/chair/chair.fbx");
-	//std::cout << "Actor::loadModelCache -- \"Projectile\" Loaded" << std::endl;
+	modelCache[numCachedModels++] = new Model("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/chair/chair.fbx");
+	std::cout << "Actor::loadModelCache -- \"Projectile\" Loaded" << std::endl;
 
 	bHasInitializedModelCache = true;
 }
@@ -84,16 +84,10 @@ Actor::Actor(Vector3D _position, Vector3D _rotation, EActorBlueprintID _blueprin
 }
 
 
-
-
 Actor::~Actor()
 {
 	// if (model) delete model; // BUG: I'm getting a memory error related to how the memory is aligned, it seems. I'll allow a memory leak for now
 }
-
-
-
-
 
 
 

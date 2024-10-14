@@ -26,7 +26,7 @@
 
 UDPSocket sock;
 // I doubt any other kind of message will exceed the size of this type of message
-char sendBuffer[1 + sizeof(unsigned int) + (MAX_ACTORS * sizeof(Actor))]{};
+char sendBuffer[1 + sizeof(unsigned int) + (MAX_ACTORS * sizeof(ActorNetData))]{};
 char* recvBuffer{};
 sockaddr_in clientAddr;
 int clientAddr_len = sizeof(clientAddr);
@@ -274,10 +274,14 @@ void playingGameLoop()
 		// -- Fixed Frequency Update -- //
 		if (secondsSinceLastUpdate >= updatePeriod) // ~20 times a second
 		{
+			std::cout << "FFU / numActors: " << actors.size() << std::endl;
+
+
 			secondsSinceLastUpdate -= updatePeriod;
 			stateSequenceID++;
 
 			// ---- Spawning Asteroids ---- //
+			/*
 			if ((stateSequenceID % 40) == 0)
 			{	// Spawn Asteroid
 				// std::cout << "TEST" << std::endl;
@@ -290,8 +294,7 @@ void playingGameLoop()
 				actors.push_back(asteroid);
 				asteroids.insert(asteroid);
 			};
-			//std::cout << actors.size() << std::endl;
-			//std::cout << asteroids.size() << std::endl;
+			*/
 
 			// -- Sending Snapshot to Clients -- //
 			if (clients.size() <= 0) return;
@@ -299,6 +302,8 @@ void playingGameLoop()
 			// - Packing actor data - //
 			sendBuffer[0] = MSG_REP;
 			unsigned int offset = 1; // Number of bytes to reach memory to be filled
+
+			// printf("FFU %d -- Actor Size: %d\n", stateSequenceID, actors.size());
 
 			memcpy(sendBuffer + 1, &stateSequenceID, sizeof(unsigned int));
 			offset += sizeof(unsigned int);
@@ -315,6 +320,7 @@ void playingGameLoop()
 				memcpy(sendBuffer + offset, &actorsDestroyedThisUpdate[i], sizeof(ActorNetData));
 				offset += sizeof(ActorNetData);
 			}
+
 			// - Sending Actor data - //
 			for (auto it = clients.begin(); it != clients.end(); ++it)
 			{
@@ -386,7 +392,7 @@ void moveActors(float deltaTime)
 }
 
 
-
+// This method is still hot garbage. It doesn't check for collisions between anything other than asteroids and playerActors
 void checkForCollisions()
 {
 	std::vector<Client>::iterator clientItr = clients.begin();
@@ -402,7 +408,7 @@ void checkForCollisions()
 		{
 			// -- Checking for Collision between Client Actor & any Asteroid -- //
 			Vector3D v1 = clientItr->controlledActor->getPosition();	// BUG: This can sometimes be pointing to end() while it's being dereferenced
-			Vector3D v2 = (*asteroidItr)->getPosition(); // Wierd dereference bc we're storing pointers while using iterators
+			Vector3D v2 = (*asteroidItr)->getPosition(); // Weird dereference bc we're storing pointers while using iterators
 			v1.z = v2.z = 0.f; // Height is just cosmetic
 			if ((v1 - v2).length() <= 20.f) 
 			{
@@ -421,6 +427,7 @@ void checkForCollisions()
 				delete clientItr->controlledActor;
 				clientItr->controlledActor = nullptr;
 
+				// BUG: asteroidFromVector is somehow being set to actors.end()
 				auto asteroidFromVector = std::find(actors.begin(), actors.end(), *asteroidItr);
 				actors.erase(asteroidFromVector);
 				delete (*asteroidItr);
@@ -609,6 +616,7 @@ void handleRPC(RemoteProcedureCall rpc)
 	{
 		case RPC_SPAWN:
 		{
+			printf("handleRPC -- Spawn Projectile\n");
 			// -- Spawning Actor -- // 
 			Actor* clientActor = std::find(clients.begin(), clients.end(), client)->controlledActor;
 

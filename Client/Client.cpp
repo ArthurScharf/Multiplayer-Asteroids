@@ -49,7 +49,7 @@ bool bIsConnectedToServer = false;
 char sendBuffer[1 + (MAX_ACTORS * sizeof(Actor))];
 char* recvBuffer{};
 int numBytesRead = -1; // TODO: This might be a duplicate of another variable
-const unsigned int NUM_PACKETS_PER_CYCLE = 10;
+const unsigned int NUM_PACKETS_PER_CYCLE = 10; // 10
 
 
 
@@ -467,19 +467,25 @@ void processInput(GLFWwindow* window)
 
 		if (glfwGetKey(window, GLFW_KEY_T) == GLFW_PRESS && !bTestButtonPressed)
 		{
-			std::cout << "handleInput / T" << std::endl;
 			bTestButtonPressed = true;
 
-			// -- Constructing RPC -- //
-			RemoteProcedureCall rpc;
-			rpc.method = RPC_SPAWN;
-			rpc.secondsSinceLastUpdate = static_cast<float>(glfwGetTime()) - lastFrame;
-			rpc.simulationStep = stateSequenceID; // Works if We're ahead
-			memcpy(&rpc.message, "Hello World", 12);
+			
+			std::cout << "processInpput / test key pressed" << std::endl;
+			actorMap.size();
 
-			// -- Sending Message -- //
-			memcpy(sendBuffer, &rpc, sizeof(RemoteProcedureCall));
-			sock.sendData(sendBuffer, sizeof(RemoteProcedureCall), serverAddr);
+			//std::cout << "handleInput / T" << std::endl;
+			//bTestButtonPressed = true;
+
+			//// -- Constructing RPC -- //
+			//RemoteProcedureCall rpc;
+			//rpc.method = RPC_SPAWN;
+			//rpc.secondsSinceLastUpdate = static_cast<float>(glfwGetTime()) - lastFrame;
+			//rpc.simulationStep = stateSequenceID; // Works if We're ahead
+			//memcpy(&rpc.message, "Hello World", 12);
+
+			//// -- Sending Message -- //
+			//memcpy(sendBuffer, &rpc, sizeof(RemoteProcedureCall));
+			//sock.sendData(sendBuffer, sizeof(RemoteProcedureCall), serverAddr);
 		}
 		else if (glfwGetKey(window, GLFW_KEY_T) == GLFW_RELEASE)
 		{
@@ -581,6 +587,7 @@ void moveActors(float deltaTime)
 
 char handleMessage(char* buffer, unsigned int bufferLen)
 {
+	//std::cout << "handleMessage / bufferLen: " << bufferLen << std::endl;
 	char handledMessage;
 	switch (buffer[0])
 	{
@@ -615,7 +622,7 @@ char handleMessage(char* buffer, unsigned int bufferLen)
 		}
 		case MSG_REP:	// Replicating
 		{
-			// std::cout << "handleMessage / MSG_REP" << std::endl;
+			std::cout << "handleMessage / MSG_REP" << std::endl;
 			/* Updates actor states to match server data.
 			*  Spawns actors that were sent to client, but don't yet exist
 			*/
@@ -650,7 +657,6 @@ char handleMessage(char* buffer, unsigned int bufferLen)
 			printf("  (dummyActorID, networkedActorID) : (%d , %d)\n", data.dummyActorID, data.networkedActorID);
 			return MSG_SPAWN;
 		}
-
 	}
 }
 
@@ -658,6 +664,8 @@ char handleMessage(char* buffer, unsigned int bufferLen)
 void replicateState(char* buffer, int bufferLen)
 {
 	// std::cout << "Client::replicateState\n";
+	// printf("replicateState / actors.size() == %d\n", actorMap.size());
+	// std::cout << "replicateState / num actors in buffer: " << bufferLen / sizeof(ActorNetData) << std::endl;
 
 	// -- Creating numActorsReceived & Checking for invalid bufferLen -- //
 	unsigned int numActorsReceived = -1;
@@ -669,6 +677,9 @@ void replicateState(char* buffer, int bufferLen)
 		printf("Client::replicateState -- length of buffer not wholly divisible by sizeof(ActorNetData)");
 		return;
 	}
+
+
+	// std::cout << "replicateState / numActorsReceived: " << numActorsReceived << std::endl;
 
 
 	// -- Creating and Copying to stateSequenceID -- //
@@ -752,8 +763,6 @@ void replicateState(char* buffer, int bufferLen)
 }
 
 
-
-
 /*
 Reads NUM_PACKETS_PER_CYCLE messages from the receive buffer.
 Anything that isnt MSG_REP, will be processed immediately.
@@ -761,6 +770,7 @@ Only the most recently received MSG_REP, within NUM_PACKETS_PER_CYCLE, will be p
 */
 void readRecvBuffer()
 {
+	//std::cout << "readReceiveBuffer: " << count++ << std::endl;
 	// ----  Receiving Data from Server ----  // Receives data from server regardless of state.
 	char* tempBuffer{};
 	int recvBufferLen = 0;
@@ -769,13 +779,30 @@ void readRecvBuffer()
 	for (int i = 0; i < NUM_PACKETS_PER_CYCLE; i++)
 	{
 		tempBuffer = sock.recvData(tempBufferLen, recvAddr);
-		if (tempBufferLen == 0)
+
+
+		/*
+		* Returns -1 because we've set the socket to non-blocking. 
+		* The error returned will be 
+		* WSAEWOULDBLOCK, which is an error code reserved for notifying that things are working as they should be
+		*/
+		if (tempBufferLen != -1)
+		{
+			std::cout << "readRecvBuffer / tempBufferLen: " << tempBufferLen << std::endl;
+		}
+		
+
+		
+
+
+		if (tempBufferLen == 0) // This will never happen?
 		{
 			printf("client::reading packets -- read all packets");
 			break;
 		}
 		if (*tempBuffer != MSG_REP)
 		{
+			// std::cout << *tempBuffer << " / " << tempBufferLen << std::endl;
 			handleMessage(tempBuffer, tempBufferLen);
 			continue;
 		}
@@ -784,6 +811,7 @@ void readRecvBuffer()
 	}
 	if (recvBufferLen > 0)
 	{
+		// std::cout << *tempBuffer << " / " << tempBufferLen << std::endl;
 		handleMessage(recvBuffer, recvBufferLen);
 	}
 }
