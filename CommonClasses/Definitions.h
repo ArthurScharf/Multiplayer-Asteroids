@@ -20,7 +20,7 @@
 // ---------- Networking Structs & Definitions ---------- //
 // ------------------------------------------------------ //
 
-// ---- Message Types ---- //	(Format: 0x___)
+// ---- Message Types ---- //
 #define MSG_CONNECT 0x001		// Connection request/confirmation
 #define MSG_TSTEP   0x002		// Simulation Step request/reply. This data is shared in STRTGM, but we may want to sometimes retreive this information on it's own
 #define MSG_REP     0x003		// Client state change request / server state replication
@@ -31,19 +31,22 @@
 #define MSG_STRTGM  0x008		// Client --> Server : Client is ready to start game | Server --> Client, game has started
 
 
-// ---- RPCs ---- //	(Format: 0x1___)
-#define RPC_TEST 0x1000			// For Debugging
+// ---- RPCs ---- //	
+#define RPC_SPAWN    0x001	// For Debugging
 
 
 
 
 
 /*
-* The Header for all RPC messages.
-* Intended to be followed with a message containing the data required for the RPC to be called
+* The Header for all RPC messages
 */
 struct RemoteProcedureCall
 {
+private:
+	char messageType = MSG_RPC;
+
+public:
 	/* Which RPC will be called*/
 	char method; 
 
@@ -53,14 +56,16 @@ struct RemoteProcedureCall
 	/* Seconds after the last fixed frequency update completed */
 	float secondsSinceLastUpdate;
 
+	/* Dynamic to allow different sizes of RPC message bodies to be used without wasting space */
 	char message[20];
 };
 
 
 
 
-
+// --------------------------------------------------------- //
 // -------------------- Message structs -------------------- //
+// --------------------------------------------------------- //
 
 /* TODO: Modify this to hold only the data required for a certain RPC */
 

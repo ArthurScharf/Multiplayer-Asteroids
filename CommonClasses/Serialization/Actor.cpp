@@ -18,6 +18,8 @@ void Actor::loadModelCache()
 	std::cout << "Actor::loadModelCache -- \"Default\" loaded" << std::endl;
 	modelCache[numCachedModels++] = new Model("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Gear/Gear1.fbx");
 	std::cout << "Actor::loadModelCache -- \"Player Character\" loaded" << std::endl;
+	modelCache[numCachedModels++] = new Model("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/Asteroid/Asteroid.fbx");
+	std::cout << "Actor::loadModelCache -- \"Asteroid\" loaded" << std::endl;
 	modelCache[numCachedModels++] = new Model("C:/Users/User/source/repos/Multiplayer-Asteroids/CommonClasses/FBX/chair/chair.fbx");
 	std::cout << "Actor::loadModelCache -- \"Projectile\" Loaded" << std::endl;
 
@@ -34,7 +36,7 @@ Actor* Actor::netDataToActor(ActorNetData data)
 
 
 Actor::Actor(Vector3D _position, Vector3D _rotation, EActorBlueprintID _blueprintID, bool bSetModel, unsigned int _id)
-	: Position(_position), Rotation(_rotation), id(_id), blueprintID(_blueprintID)
+	: Position(_position), Rotation(_rotation), Scale(1.f), id(_id), blueprintID(_blueprintID)
 {
 	if (bSetModel)
 	{
@@ -63,6 +65,13 @@ Actor::Actor(Vector3D _position, Vector3D _rotation, EActorBlueprintID _blueprin
 		moveDirection = _rotation;
 		break;
 	}
+	case ABI_Asteroid:
+	{
+		Scale = 0.2; // Hardcode since asteroid model will never change
+		moveSpeed = 50.f;
+		moveDirection  = _rotation;
+		break;
+	}
 	default:
 	{
 		// Is warning bc we may need a reason to create actor with custom settings.
@@ -75,16 +84,10 @@ Actor::Actor(Vector3D _position, Vector3D _rotation, EActorBlueprintID _blueprin
 }
 
 
-
-
 Actor::~Actor()
 {
 	// if (model) delete model; // BUG: I'm getting a memory error related to how the memory is aligned, it seems. I'll allow a memory leak for now
 }
-
-
-
-
 
 
 
@@ -115,6 +118,7 @@ void Actor::Draw(Shader& shader)
 		return;
 	}
 	shader.setVec3("positionOffset", glm::vec3(Position.x, Position.y, Position.z));
+	shader.setFloat("scale", Scale);
 	model->Draw(shader);
 }
 

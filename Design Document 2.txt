@@ -80,3 +80,28 @@ Thus, loading must occur AFTER a connection is established. This is obviously a 
 
 Future ID objects should also be able to be set to null. This is useful in cases like those of the proxies, where it feels dangerous
 having no option to denote that the ID should not be used
+
+
+
+
+
+
+
+
+----- Server to Client Replication Issue -----
+Are the Server-Actors being Destroyed?
+	> Yes
+
+Is the client receiving the correct number of actors?
+	> The client can only handle 3 actors. After that, a 4th actor is being sent (proof below) but not being properly replicated by the client.
+
+
+	> Proof that the non-rendered actor is being sent by the server
+		> The moment the client successfully destroys a 3rd actor, the other actor immediately becomes rendered
+
+Is the size of the client-buffer, which stores the incoming actor data, correctly sized?
+	> NO! It was arbitrarily set to 200. This number must be properly selected
+
+
+
+

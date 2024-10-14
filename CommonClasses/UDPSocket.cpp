@@ -110,14 +110,19 @@ void UDPSocket::sendData(const char* buffer, unsigned int bufferLen, sockaddr_in
 	int bytesSent = sendto(sock, buffer, bufferLen, 0, (sockaddr*)&recvAddr, sizeof recvAddr);	
 }
 
-
+/*
+* This code was written by a less experienced Arthur.
+* While it's useful to wrap the UDP socket, having the return value
+* of this function not be the return value of recvFrom channges things for
+* no obvious reason.
+*/
 char* UDPSocket::recvData(int& numBytesRead, sockaddr_in& sendingSockAddr)
 {
 	numBytesRead = 0;
 	//std::cout << "UDPSocket::recvData\n";
-	char* buffer = (char*)malloc(BUFFER_SIZE); // BUG: This should allocate memory. the way it's used, it will fill up the processes OS memory
+	char* buffer = (char*)malloc(bufferSize); // BUG: This should allocate memory. the way it's used, it will fill up the processes OS memory
 	int sockAddr_len = sizeof(sendingSockAddr);
-	numBytesRead = recvfrom(sock, buffer, BUFFER_SIZE, 0, (SOCKADDR*)&sendingSockAddr, &sockAddr_len);
+	numBytesRead = recvfrom(sock, buffer, bufferSize, 0, (SOCKADDR*)&sendingSockAddr, &sockAddr_len);
 	//std::cout << "  `recvfrom` finished\n";
 	return buffer;
 }

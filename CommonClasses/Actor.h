@@ -35,6 +35,7 @@ enum EActorBlueprintID
 {
 	ABI_Default,
 	ABI_PlayerCharacter,
+	ABI_Asteroid,
 	ABI_Projectile
 };
 
@@ -49,12 +50,23 @@ for size checks
 */
 struct ActorNetData
 {
-	unsigned int id;
+	unsigned int id; // 0 is never assigned. Reserved as a sort of `null` state for id.
 	EActorBlueprintID blueprintID; // Used to identify which actor blueprint this is
 	Vector3D Position;
 	Vector3D Rotation; // Should be a rotator. For now, is a Vector3D
 	Vector3D moveDirection; // Normalized vector choosing which direction this actor moves
 	float moveSpeed;
+	bool bIsDestroyed; // Used to identify actors that are to be destroyed locally by the client
+
+	ActorNetData() :
+		id(0),
+		blueprintID(ABI_Default),
+		Position(0.f),
+		Rotation(0.f),
+		moveDirection(0.f),
+		moveSpeed(0.f),
+		bIsDestroyed(false) 
+	{}
 };
 
 
@@ -91,6 +103,7 @@ private:
 	EActorBlueprintID blueprintID;
 	Vector3D Position;
 	Vector3D Rotation; // Should be a rotator. For now, is a Vector3D
+	float Scale;
 	Vector3D moveDirection; // Normalized vector choosing which direction this actor moves
 	float moveSpeed;
 	Model* model;
