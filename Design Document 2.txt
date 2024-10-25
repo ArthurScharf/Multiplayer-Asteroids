@@ -103,5 +103,3 @@ Is the size of the client-buffer, which stores the incoming actor data, correctl
 	> NO! It was arbitrarily set to 200. This number must be properly selected
 
 
-
-

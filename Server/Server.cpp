@@ -132,6 +132,7 @@ float_time_point getCurrentTime();
 int main()
 {
 	sock.init(true);
+	sock.setRecvBufferSize(2000); // TODO: Arbitrary. Should be chosen more intelligently
 	clientAddr.sin_family = AF_INET;
 	clientAddr.sin_port = htons(4242);
 	bool bRunMainLoop = true;
@@ -332,7 +333,6 @@ void playingGameLoop()
 			// -- Clearing Actors Destroyed from This Update -- //
 			if (actorsDestroyedThisUpdate.size() > 0)
 			{
-				std::cout << "clear" << std::endl;
 				actorsDestroyedThisUpdate.clear();
 			}
 		}//~ Fixed Update

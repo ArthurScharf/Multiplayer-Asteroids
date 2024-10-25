@@ -10,6 +10,10 @@
 
 int UDPSocket::init(bool bIsServer)
 {
+	// -- 0. Initialize relevant variables -- //
+	UDPSocket::bufferSize = 256; // This is an arbitrary number. User should always set this themselves before using the socket
+
+
 	// -- 1. Load the DLL -- //
 	int error = 0;
 	WORD wVersionRequested = MAKEWORD(2, 2);
@@ -109,6 +113,9 @@ void UDPSocket::sendData(const char* buffer, unsigned int bufferLen, sockaddr_in
 	}
 	int bytesSent = sendto(sock, buffer, bufferLen, 0, (sockaddr*)&recvAddr, sizeof recvAddr);	
 }
+
+
+
 
 /*
 * This code was written by a less experienced Arthur.

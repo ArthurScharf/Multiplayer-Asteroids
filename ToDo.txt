@@ -27,16 +27,30 @@ Destroy doomed actors during fixed update
 [X] 2. Retrieving the timestep from the server
 
 
-3. Remote Procedure calls
+[X] 3. Remote Procedure calls
 	- Double check that old passed calls are being removed properly
 	- Consider making approach to storing and removing calls more efficient
 
 
-4. move Spawning to be an RPC
+[X] 4. move Spawning to be an RPC
 	- Should client also receive spawn RPC? (Probably not. What we have works well enough rn)
 
+[ ] 5. Proper proxy handling
+	- Is the proxy positioned correctly? I recall the proxy being in the wrong location once the client was being handled
+	- Destroying the proxy when the client receives proper replication
 
-5. State comparison & Reconciliation
+
+[ ] 6. State comparison & Reconciliation
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -49,10 +63,6 @@ Destroy doomed actors during fixed update
 
 
 
-
-[ ] Modify Message Sending 
-	1. Consider using enums for messages. Avoids needing to lookup which chars have already been used. Can I use a short as an Enum?
-	2. Messages are always RPCS?
 
 
 

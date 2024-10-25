@@ -204,6 +204,7 @@ void initiateConnectionLoop() // char* sendBuffer, char* recvBuffer, int& numByt
 {
 	// ---- Establishing Connection ---- //
 	sock.init(false);
+	sock.setRecvBufferSize(2000); // TODO: Arbitrary. Should be chosen more intelligently
 	/* Properly formatting received IP address string and placing it in sockaddr_in struct */
 	serverAddr.sin_family = AF_INET;
 
@@ -283,8 +284,6 @@ void playingGameLoop()
 			elapsedTimeSinceUpdate -= updatePeriod;
 			stateSequenceID++;
 
-			//std::cout << "Fixed Update: " << stateSequenceID << std::endl;
-
 			// -- Creating New State -- //
 			std::vector<Actor*> actors;
 			for (auto iter = actorMap.begin(); iter != actorMap.end(); iter++)
@@ -310,8 +309,6 @@ void playingGameLoop()
 		glfwSwapBuffers(window);
 	}//~ Main Loop
 }
-
-
 
 
 
@@ -357,6 +354,7 @@ int initRendering()
 
 	return 0;
 }
+
 
 void Render()
 {
@@ -527,7 +525,6 @@ void spawnProjectile()
 }
 
 
-
 void destroyActor(unsigned int id)
 {
 	std::cout << "destroy actor\n";
@@ -541,7 +538,6 @@ void destroyActor(unsigned int id)
 	}
 	delete actor;
 }
-
 
 
 void moveActors(float deltaTime)
@@ -585,85 +581,143 @@ void moveActors(float deltaTime)
 }
 
 
+/*
+Reads NUM_PACKETS_PER_CYCLE messages from the receive buffer.
+Anything that isnt MSG_REP, will be processed immediately.
+Only the most recently received MSG_REP, within NUM_PACKETS_PER_CYCLE, will be processed.
+*/
+void readRecvBuffer()
+{
+	// std::cout << "readReceiveBuffer" << std::endl;
+	
+	// ----  Receiving Data from Server ----  // Receives data from server regardless of state.
+	char* tempBuffer{};
+	int recvBufferLen = 0;
+	int tempBufferLen = 0;
+	sockaddr_in recvAddr; // This is never used on purpose. Code smell
+	for (int i = 0; i < NUM_PACKETS_PER_CYCLE; i++)
+	{
+		tempBuffer = sock.recvData(tempBufferLen, recvAddr);
+
+		/* NOTE: For some reason, this block of code will a bug in replication.
+		*  If this block is implemented, the client won't create any new actors, suggesting
+		*  this block of code permits the discarding of messages we don't want ignored
+		*/
+		//if (tempBufferLen == -1)
+		//{
+		//	/*
+		//	* Returns -1 because we've set the socket to non-blocking.
+		//	* The error returned will be
+		//	* WSAEWOULDBLOCK, which is an error code reserved for notifying that things are working as they should be
+		//	*/
+		//	return;
+		//}
+		
+
+		// Not a replication message --> Handle right away
+		if (*tempBuffer != MSG_REP)
+		{
+			// std::cout << "!MSG_REP" << std::endl;
+			// std::cout << *tempBuffer << " / " << tempBufferLen << std::endl;
+			handleMessage(tempBuffer, tempBufferLen);
+			continue;
+		}
+
+		// Update the values for the most recently seen replication data which is stored in the recvBuffer
+		recvBuffer = tempBuffer;
+		recvBufferLen = tempBufferLen;
+	}
+
+
+	// Handle the most recently seen replication message within the most recently read NUM_PACKETS_PER_CYCLE messages
+	if (recvBufferLen > 0)
+	{
+		// std::cout << "readRecvBuffer / " << (tempBufferLen / sizeof(ActorNetData)) << std::endl;
+		// std::cout << *tempBuffer << " / " << tempBufferLen << std::endl;
+		handleMessage(recvBuffer, recvBufferLen);
+	}
+}
+
+
 char handleMessage(char* buffer, unsigned int bufferLen)
 {
-	//std::cout << "handleMessage / bufferLen: " << bufferLen << std::endl;
+	// std::cout << "handleMessage / bufferLen: " << bufferLen << std::endl;
 	char handledMessage;
 	switch (buffer[0])
 	{
-		case MSG_CONNECT:	// Connection Reply
-		{
-			printf("handleMessage / MSG_CONNECT\n");
+	case MSG_CONNECT:	// Connection Reply
+	{
+		printf("handleMessage / MSG_CONNECT\n");
 
-			ConnectAckData data;
-			memcpy(&data, recvBuffer, sizeof(ConnectAckData));
-			controlledActorID = data.controlledActorID;
-			bPlayerActorIDSet = true; 
-			printf("	/ controlledActorID: %d\n", controlledActorID);
-			currentState = CS_WaitingForGameStart;
-			return MSG_CONNECT;
-		}
-		case MSG_STRTGM:
-		{
-			printf("handleMessage / MSG_STRTGM\n");
-			StartGameData data;
-			memcpy(&data, buffer, sizeof(StartGameData));
-			stateSequenceID = 5 + data.simulationStep;
-			printf("   Received State Sequence ID : %d\n", stateSequenceID);
-			currentState = CS_PlayingGame;
-			return MSG_STRTGM;
-		}
-		case MSG_TSTEP:	// Receive current simulation step
-		{
-			memcpy(&stateSequenceID, buffer + 1, sizeof(unsigned int));
-			stateSequenceID += 5;
-			printf("handleMessage / MSG_TSTEP -- Received State Sequence ID : %d\n", stateSequenceID);
-			return MSG_TSTEP;
-		}
-		case MSG_REP:	// Replicating
-		{
-			std::cout << "handleMessage / MSG_REP" << std::endl;
-			/* Updates actor states to match server data.
-			*  Spawns actors that were sent to client, but don't yet exist
-			*/
-			replicateState(++buffer, --bufferLen); // TODO: Fixed update actors shouldn't be here. It should always be called and check for missing states when comparing
-			return MSG_REP;
-		}
-		case MSG_ID:	// Receiving Controlled Actor ID
-		{
-			memcpy(&controlledActorID, ++buffer, sizeof(unsigned int));
-			bPlayerActorIDSet = true;
-			printf("handleMessage / MSG_ID : controlledActorID: %d\n", controlledActorID);
-			return MSG_ID;
-		}
-		case MSG_SPAWN:
-		{
-			printf("handleMessage / MSG_SPAWN\n");
+		ConnectAckData data;
+		memcpy(&data, recvBuffer, sizeof(ConnectAckData));
+		controlledActorID = data.controlledActorID;
+		bPlayerActorIDSet = true;
+		printf("	/ controlledActorID: %d\n", controlledActorID);
+		currentState = CS_WaitingForGameStart;
+		return MSG_CONNECT;
+	}
+	case MSG_STRTGM:
+	{
+		printf("handleMessage / MSG_STRTGM\n");
+		StartGameData data;
+		memcpy(&data, buffer, sizeof(StartGameData));
+		stateSequenceID = 5 + data.simulationStep;
+		printf("   Received State Sequence ID : %d\n", stateSequenceID);
+		currentState = CS_PlayingGame;
+		return MSG_STRTGM;
+	}
+	case MSG_TSTEP:	// Receive current simulation step
+	{
+		memcpy(&stateSequenceID, buffer + 1, sizeof(unsigned int));
+		stateSequenceID += 5;
+		printf("handleMessage / MSG_TSTEP -- Received State Sequence ID : %d\n", stateSequenceID);
+		return MSG_TSTEP;
+	}
+	case MSG_REP:	// Replicating
+	{
+		std::cout << "handleMessage / MSG_REP" << std::endl;
+		/* Updates actor states to match server data.
+		*  Spawns actors that were sent to client, but don't yet exist
+		*/
+		replicateState(++buffer, --bufferLen); // TODO: Fixed update actors shouldn't be here. It should always be called and check for missing states when comparing
+		return MSG_REP;
+	}
+	case MSG_ID:	// Receiving Controlled Actor ID
+	{
+		memcpy(&controlledActorID, ++buffer, sizeof(unsigned int));
+		bPlayerActorIDSet = true;
+		printf("handleMessage / MSG_ID : controlledActorID: %d\n", controlledActorID);
+		return MSG_ID;
+	}
+	case MSG_SPAWN:
+	{
+		printf("handleMessage / MSG_SPAWN\n");
 
-			/* Reply to Spawn Request
-			*  Links locally spawned dummy with authoritative server copy
-			*/
-			NetworkSpawnData data;
-			memcpy(&data, buffer, sizeof(NetworkSpawnData));
+		/* Reply to Spawn Request
+		*  Links locally spawned dummy with authoritative server copy
+		*/
+		NetworkSpawnData data;
+		memcpy(&data, buffer, sizeof(NetworkSpawnData));
 
-			/*
-			unlinked proxy becomes a normal actor. This avoids the overhead cost of constructing a new actor when required
-			*/
-			Actor* linkedActor = unlinkedProxies[data.dummyActorID];
-			linkedActor->setId(data.networkedActorID);
-			actorMap[data.networkedActorID] = linkedActor;
-			unlinkedProxies.erase(data.dummyActorID);
+		/*
+		unlinked proxy becomes a normal actor. This avoids the overhead cost of constructing a new actor when required
+		*/
+		Actor* linkedActor = unlinkedProxies[data.dummyActorID];
+		linkedActor->setId(data.networkedActorID);
+		actorMap[data.networkedActorID] = linkedActor;
+		unlinkedProxies.erase(data.dummyActorID);
 
-			printf("  (dummyActorID, networkedActorID) : (%d , %d)\n", data.dummyActorID, data.networkedActorID);
-			return MSG_SPAWN;
-		}
+		printf("  (dummyActorID, networkedActorID) : (%d , %d)\n", data.dummyActorID, data.networkedActorID);
+		return MSG_SPAWN;
+	}
 	}
 }
 
 
 void replicateState(char* buffer, int bufferLen)
 {
-	// std::cout << "Client::replicateState\n";
+	std::cout << "Client::replicateState\n";
 	// printf("replicateState / actors.size() == %d\n", actorMap.size());
 	// std::cout << "replicateState / num actors in buffer: " << bufferLen / sizeof(ActorNetData) << std::endl;
 
@@ -679,7 +733,7 @@ void replicateState(char* buffer, int bufferLen)
 	}
 
 
-	// std::cout << "replicateState / numActorsReceived: " << numActorsReceived << std::endl;
+	std::cout << "replicateState / numActorsReceived: " << numActorsReceived << std::endl;
 
 
 	// -- Creating and Copying to stateSequenceID -- //
@@ -699,8 +753,8 @@ void replicateState(char* buffer, int bufferLen)
 	{
 		ActorNetData data;
 		memcpy(&data, buffer, sizeof(data));
-		
-		
+
+
 		if (data.bIsDestroyed) // -- Actor has been destroyed on the server -- //
 		{
 			destroyActor(data.id);
@@ -743,18 +797,17 @@ void replicateState(char* buffer, int bufferLen)
 	{
 		// std::cout << "replicateState -- !clientState" << std::endl;
 	}
-	
+
 
 
 	if ((clientState == state) == false)
 	{
 		// std::cout << "replicateState -- Not equivalent" << std::endl;
 	}
-	
 
+
+	// TODO: Reconcile
 	return;
-
-
 	if (!stateBuffer.contains(state))
 	{
 		// TODO: Reconcile
@@ -762,59 +815,6 @@ void replicateState(char* buffer, int bufferLen)
 	delete state;
 }
 
-
-/*
-Reads NUM_PACKETS_PER_CYCLE messages from the receive buffer.
-Anything that isnt MSG_REP, will be processed immediately.
-Only the most recently received MSG_REP, within NUM_PACKETS_PER_CYCLE, will be processed.
-*/
-void readRecvBuffer()
-{
-	//std::cout << "readReceiveBuffer: " << count++ << std::endl;
-	// ----  Receiving Data from Server ----  // Receives data from server regardless of state.
-	char* tempBuffer{};
-	int recvBufferLen = 0;
-	int tempBufferLen = 0;
-	sockaddr_in recvAddr; // This is never used on purpose. Code smell
-	for (int i = 0; i < NUM_PACKETS_PER_CYCLE; i++)
-	{
-		tempBuffer = sock.recvData(tempBufferLen, recvAddr);
-
-
-		/*
-		* Returns -1 because we've set the socket to non-blocking. 
-		* The error returned will be 
-		* WSAEWOULDBLOCK, which is an error code reserved for notifying that things are working as they should be
-		*/
-		if (tempBufferLen != -1)
-		{
-			std::cout << "readRecvBuffer / tempBufferLen: " << tempBufferLen << std::endl;
-		}
-		
-
-		
-
-
-		if (tempBufferLen == 0) // This will never happen?
-		{
-			printf("client::reading packets -- read all packets");
-			break;
-		}
-		if (*tempBuffer != MSG_REP)
-		{
-			// std::cout << *tempBuffer << " / " << tempBufferLen << std::endl;
-			handleMessage(tempBuffer, tempBufferLen);
-			continue;
-		}
-		recvBuffer = tempBuffer;
-		recvBufferLen = tempBufferLen;
-	}
-	if (recvBufferLen > 0)
-	{
-		// std::cout << *tempBuffer << " / " << tempBufferLen << std::endl;
-		handleMessage(recvBuffer, recvBufferLen);
-	}
-}
 
 
 void cleanup()

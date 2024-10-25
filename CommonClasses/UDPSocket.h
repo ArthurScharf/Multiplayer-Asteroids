@@ -4,8 +4,6 @@
 
 #pragma comment(lib, "ws2_32.lib")
 
-// DEPRECATED. use bufferSize
-#define BUFFER_SIZE 200
 
 class UDPSocket
 {
@@ -13,10 +11,9 @@ private:
 	SOCKET sock;
 	const char* IPv4;
 	/* Number of bytes allocated to the recvBuffer in UDPSocket::recvData.
-	*  Default value is 256 (chosen arbitrarily).
 	*  Maximum Packet size (of fragmentation is allowed) is 65,535 (2^16).
 	*/
-	static const int bufferSize = 2000; // TEST value. Arbitrary
+	int bufferSize = 256;
 
 public:
 	// returns 0 if ok. anything means error
@@ -28,4 +25,6 @@ public:
 	
 public:
 	inline const char* getIPv4() { return IPv4; }
+
+	inline void setRecvBufferSize(int numBytes) { bufferSize = numBytes; }
 };
