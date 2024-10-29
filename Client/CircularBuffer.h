@@ -9,6 +9,10 @@
 
 #define MAX_STATES 20 // This number needs to be decided on based upon the rate at which states are created and consumed
 
+
+/*
+* A circular buffer that stores GameState objects.
+*/
 class CircularBuffer
 {
 private:

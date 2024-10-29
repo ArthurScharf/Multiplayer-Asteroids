@@ -153,7 +153,6 @@
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="Model.h" />
     <ClInclude Include="pch.h" />
-    <ClInclude Include="RemoteProcedureCallQueue.h" />
     <ClInclude Include="Serialization\Serializeable.h" />
     <ClInclude Include="Serialization\Serializer.h" />
     <ClInclude Include="Shader.h" />

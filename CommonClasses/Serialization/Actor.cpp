@@ -36,7 +36,7 @@ Actor* Actor::netDataToActor(ActorNetData data)
 
 
 Actor::Actor(Vector3D _position, Vector3D _rotation, EActorBlueprintID _blueprintID, bool bSetModel, unsigned int _id)
-	: Position(_position), Rotation(_rotation), Scale(1.f), id(_id), blueprintID(_blueprintID)
+	: Position(_position), Scale(1.f), id(_id), blueprintID(_blueprintID)
 {
 	if (bSetModel)
 	{
@@ -50,6 +50,20 @@ Actor::Actor(Vector3D _position, Vector3D _rotation, EActorBlueprintID _blueprin
 	{
 		model = nullptr;
 	}
+
+
+	/* Setting Rotation
+	* Rotation must always be length of 1
+	*/
+	if (_rotation.length() == 0)
+	{
+		Rotation = Vector3D(1.f, 0.f, 0.f);
+	}
+	else
+	{
+		Rotation = _rotation.getNormal();
+	}
+
 
 	switch (blueprintID)
 	{

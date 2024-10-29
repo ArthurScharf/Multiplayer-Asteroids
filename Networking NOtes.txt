@@ -1,0 +1,4 @@
+Rollback handles cases where one node on the network (client or server) is ahead, but a past state is needed.
+
+
+Prediction is where the 

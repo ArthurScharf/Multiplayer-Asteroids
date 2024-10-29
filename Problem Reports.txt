@@ -1,0 +1,185 @@
+
+
+
+
+-------------------------------
+---------- Problem 1 ----------
+-------------------------------
+
+
+---- Context ----
+When the client fires a projectile, an RPC message is sent to the server.
+
+Since the client is ahead of the server's simulation, the message includes the clients simulation step,
+as well as the number of seconds from the beginning of the current timestep, and the moment the RPC was called.
+
+Since we want responsiveness, the client cannot wait until the RPC is processed and the projectile is created and replicated, to show the projectile.
+The client spawns a proxy projectile that must be replaced when the server replicates the true projectiles data back.
+
+
+---- Problem Statement ----
+The replicated true data places the newly spawned local copy to be BEHIND the proxy temporally. Why is this happening and can it be fixed?
+
+
+
+
+---- Understanding the Problem ----
+
+step n
+	spawn RPC sent
+	Proxy spawned
+		 
+
+step n + k
+	replication received by client
+	
+
+Earlier understanding was wrong
+
+
+---- Problem Re-statement ----
+All proxies will always be ahead because they are created on the client, putting them ahead temporaly relative to the server
+
+Viewing from another perspective, the data replicated back to the client is data seen in the past
+
+
+
+
+
+
+
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+------------------- Problem 2 -------------------
+
+	DEFINE: Owned-Actor 
+		> Actor that is created by the context-client
+		
+	DEFINE: Context-client
+		> The client we're describing the system from the perspective of.
+	
+	DEFINE: Owned Actor
+		> Actor created (and usually controlled) by the context-client
+		
+	DEFINE: External state
+		> The true state of anything in the network that isn't the context
+	
+	DEFINE: Context
+		> The network node we're decribing the system from the perspective of
+
+
+
+Actors created by the context-client
+	Receive state updates from the server.
+	These updates are from the past, so comparison between them and the controlled actors can only be for those actor's past states
+	
+	Implement > Check previous state of actor against data. 
+		if they match > continue
+		if they dont  > reconcile
+	
+	
+Actors created by the server
+	Context client will create copy of actor using data that is temporally behind context-client state.
+	Can still simulate this actor between FFUs, but actor will exist in the past relative to actors created by the Context-client
+	MUST be simulated locally between FFUs. Otherwise non-context-client actors will be choppy, which means desynch is more likely
+		
+	Implement > Simulate non-owned-actors between FFUs
+		
+		
+			
+		
+NOTE: Server and Clients each independently simulate between FFUs. FFU is just used to synchronize timesteps.
+      This means we can build an entire game before we implement networking, then implement
+	  state-saving and reconciliation seperatly.
+	
+	
+
+	
+Actors created by other-client (SEE NOTE)
+	other-client creates actor at simulation-step n
+	Conceptually, context-client should also be on n
+	server is on n-k
+	
+	creation instructions reach server and it simulates until it reaches timestep that creation took place. Creates actor and begins replicating it.
+	all clients are now supposed to be on step n+k
+	
+	Context-client receivesu updates on this actor as though it were created in the past.
+	
+	NOTE: All replicated data created by the other-client must be processed by the server before it is replicated. This means it is always 
+	      temporally behind the context-client as if that data has been created by the server. Thus, the problem of communcation with 
+		  other-clients is the same as communcation with the server
+		  
+		  
+		  
+		  
+Problem Statement: The first time the context-client sees non-owned actor data, that data will already be temporally behind the context-client.
+                   In other words, the context client is receiving actor data for FFU n where the context-client is already on 
+				   timestep n+r.
+				   
+				   Do we simply treat this data as if it is up to date? (Solution: pretend)
+				   
+				   Do we extrapolate the data? (Solution: Extrapolate)
+				   
+				   
+				   
+
+				   
+				   
+				   
+----- Solution: Pretend -----
+As long as network latency is low, the different between FFUs n+k and n will be small enough that a human user won't notice much.
+
+
+NOTE: The moment that an outdated-non-owned-actor is created on the context-client, it will also be simulated. Even though 
+each subsequent update it receives will be for the next state, the travel time between non-context-client to server to context-client will
+mean that the outdated-non-owned-actor will still be a little ahead in it's simulation.
+Therefore, all actors will be subject to reconcilation algorithms
+
+
+
+
+
+----- Solution: Extrapolate -----
+Gives a potentiall more real representation of external states
+
+
+
+
+
+
+----- Handling Collisions -----
+
+Server will receive client-side raycast to see if hit.
+
+Server must rewind in time for all actors that aren't owned by the shooting actor.
+
+Thus, each RPC like action must also store the server time (FFU, time since last update) it was received at.
+This time is used to rewind.
+
+How do we deal with collisions between physics objects?
+ Collision RPC?
+
+Small latency between the client and the server means we can probably just let the server handle collision and accept that it'll be a tiny bit imperfect.
+This feels like a reasonable corner to cut given the project is intended for LAN
+
+
+
+
+
+QUESTION: How is a collision detected? Does the Server inform of collision, or does a client?
+
+Server collision detection is simpler. We just Allow the server to update the clients, and ignore collision. Can be extended later with 
+client side collision prediction
+
+QUESTION: How does this approach affect the context-client when colliding with actors it doesn't own?
+
+Client is ahead, there are collisions that could happen that won't look right
+
+
+
+
+
+
+

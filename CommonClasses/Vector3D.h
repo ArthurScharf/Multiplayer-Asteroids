@@ -25,6 +25,9 @@ public:
 	*/
 	void Normalize();
 
+	/* Returns the normalized vector*/
+	Vector3D getNormal();
+
 	/* Zeros the vector */
 	void zero(); 
 
@@ -49,13 +52,6 @@ public:
 };
 
 
-//static Vector3D& operator*(Vector3D& v, float f) 
-//{
-//	v.x *= f;
-//	v.y *= f;
-//	v.z *= f;
-//	return v;
-//}
 
 static Vector3D operator*(Vector3D v, float f)
 {

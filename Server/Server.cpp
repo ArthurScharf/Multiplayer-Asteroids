@@ -275,7 +275,7 @@ void playingGameLoop()
 		// -- Fixed Frequency Update -- //
 		if (secondsSinceLastUpdate >= updatePeriod) // ~20 times a second
 		{
-			std::cout << "FFU / numActors: " << actors.size() << std::endl;
+			// std::cout << "FFU / numActors: " << actors.size() << std::endl;
 
 
 			secondsSinceLastUpdate -= updatePeriod;
@@ -626,8 +626,15 @@ void handleRPC(RemoteProcedureCall rpc)
 				return;
 			}
 
+			// BUG: Is Spawning at the actor's current location, not the location that it was when it spawned the projectile
+
+			// TESTING
+			std::cout << "handleRPC / rotation: " << clientActor->getRotation().toString() << std::endl;
+			std::cout << "handleRPC / rotation * dist: " << (clientActor->getRotation() * 200.f).toString() << std::endl;
+
+
 			Actor* projectile = new Actor(
-				clientActor->getPosition() + (clientActor->getRotation() * 100.f),
+				clientActor->getPosition() + (clientActor->getRotation() * 5000.f),
 				Vector3D(1.f, 0.f, 0.f),
 				ABI_Projectile,
 				false

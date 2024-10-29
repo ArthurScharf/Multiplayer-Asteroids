@@ -126,11 +126,9 @@ void UDPSocket::sendData(const char* buffer, unsigned int bufferLen, sockaddr_in
 char* UDPSocket::recvData(int& numBytesRead, sockaddr_in& sendingSockAddr)
 {
 	numBytesRead = 0;
-	//std::cout << "UDPSocket::recvData\n";
 	char* buffer = (char*)malloc(bufferSize); // BUG: This should allocate memory. the way it's used, it will fill up the processes OS memory
 	int sockAddr_len = sizeof(sendingSockAddr);
 	numBytesRead = recvfrom(sock, buffer, bufferSize, 0, (SOCKADDR*)&sendingSockAddr, &sockAddr_len);
-	//std::cout << "  `recvfrom` finished\n";
 	return buffer;
 }
 

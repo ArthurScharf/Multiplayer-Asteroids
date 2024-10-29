@@ -26,9 +26,11 @@
 #include "CircularBuffer.h"
 
 
-
-
 #pragma comment(lib, "ws2_32.lib") // What is this doing?
+
+
+// -- Pre-processor Commands -- //			<---- These are used to include/disclude features.
+#define PROXIES true
 
 
 // ---- Rendering ----- //
@@ -49,11 +51,12 @@ bool bIsConnectedToServer = false;
 char sendBuffer[1 + (MAX_ACTORS * sizeof(Actor))];
 char* recvBuffer{};
 int numBytesRead = -1; // TODO: This might be a duplicate of another variable
-const unsigned int NUM_PACKETS_PER_CYCLE = 10; // 10
+const unsigned int NUM_PACKETS_PER_CYCLE = 50; // 10
 
 
 
 // ----- Actors ----- //
+
 // KEY : Actor Network ID	| VALUE : The corresponding actor 
 std::map<unsigned int, Actor*> actorMap;
 // Stores network ID for actor this client is controlling. Necessary bc a client can be connected without an actor
@@ -104,6 +107,14 @@ float lastFrame = 0.f;
 float updatePeriod = 1.f / 20.f; // Verbose to allow easy editing. Should be properly declared later 20.f
 float elapsedTimeSinceUpdate = 0.f; // Seconds
 unsigned int stateSequenceID = 0;
+
+
+// -- Testing -- //
+#if PROXIES 
+float spawnTimeStart = 0.f;
+float spawnLatencySeconds = 0.f;
+bool bShouldPrintTime = true;
+#endif
 
 
 
@@ -313,6 +324,7 @@ void playingGameLoop()
 
 
 
+
 int initRendering()
 {
 	// -- OpenGL -- //
@@ -454,6 +466,9 @@ void processInput(GLFWwindow* window)
 		// -- Actions -- //
 		if (glfwGetKey(window, GLFW_KEY_J) == GLFW_PRESS && !bFireButtonPressed)
 		{
+			// TESTING
+			bShouldPrintTime = true;
+			//~
 			spawnProjectile();
 			bFireButtonPressed = true;
 		}
@@ -504,16 +519,24 @@ void spawnProjectile()
 	present a more confusing header for actor. Thus, I'm setting things manually here, since this process should
 	only ever be done once */
 
+
+#if PROXIES
+	// TESTING
+	spawnTimeStart = static_cast<float>(glfwGetTime());
+	//~
+
 	// ---- Constructing Unlinked Proxy ---- //
-	//Actor* projectile = new Actor(
-	//	playerActor->getPosition() + (playerActor->getRotation() * 100.f),
-	//	playerActor->getRotation(),
-	//	ABI_Projectile,
-	//	true,
-	//	++nextProxyID
-	//);
-	//projectile->setMoveDirection(Vector3D(1.f, 0.f, 0.f));
-	//unlinkedProxies.insert({ nextProxyID, projectile });
+	Actor* projectile = new Actor(
+		playerActor->getPosition() + (playerActor->getRotation() * 1.f), // Offset is less so true actor and proxy are at approximately the same position on the client
+		playerActor->getRotation(),
+		ABI_Projectile,
+		true,
+		++nextProxyID
+	);
+	projectile->setMoveDirection(Vector3D(1.f, 0.f, 0.f));
+	unlinkedProxies.insert({ nextProxyID, projectile });
+#endif
+
 
 	// ---- Sending data to server ---- //
 	RemoteProcedureCall rpc;
@@ -662,7 +685,7 @@ char handleMessage(char* buffer, unsigned int bufferLen)
 		printf("handleMessage / MSG_STRTGM\n");
 		StartGameData data;
 		memcpy(&data, buffer, sizeof(StartGameData));
-		stateSequenceID = 5 + data.simulationStep;
+		stateSequenceID = 5 + data.simulationStep; // 5 + ...
 		printf("   Received State Sequence ID : %d\n", stateSequenceID);
 		currentState = CS_PlayingGame;
 		return MSG_STRTGM;
@@ -670,13 +693,13 @@ char handleMessage(char* buffer, unsigned int bufferLen)
 	case MSG_TSTEP:	// Receive current simulation step
 	{
 		memcpy(&stateSequenceID, buffer + 1, sizeof(unsigned int));
-		stateSequenceID += 5;
+		stateSequenceID += 5; // 5
 		printf("handleMessage / MSG_TSTEP -- Received State Sequence ID : %d\n", stateSequenceID);
 		return MSG_TSTEP;
 	}
 	case MSG_REP:	// Replicating
 	{
-		std::cout << "handleMessage / MSG_REP" << std::endl;
+		// std::cout << "handleMessage / MSG_REP" << std::endl; 
 		/* Updates actor states to match server data.
 		*  Spawns actors that were sent to client, but don't yet exist
 		*/
@@ -700,6 +723,8 @@ char handleMessage(char* buffer, unsigned int bufferLen)
 		NetworkSpawnData data;
 		memcpy(&data, buffer, sizeof(NetworkSpawnData));
 
+
+#if PROXIES
 		/*
 		unlinked proxy becomes a normal actor. This avoids the overhead cost of constructing a new actor when required
 		*/
@@ -710,6 +735,7 @@ char handleMessage(char* buffer, unsigned int bufferLen)
 
 		printf("  (dummyActorID, networkedActorID) : (%d , %d)\n", data.dummyActorID, data.networkedActorID);
 		return MSG_SPAWN;
+#endif
 	}
 	}
 }
@@ -717,7 +743,7 @@ char handleMessage(char* buffer, unsigned int bufferLen)
 
 void replicateState(char* buffer, int bufferLen)
 {
-	std::cout << "Client::replicateState\n";
+	// std::cout << "Client::replicateState\n";
 	// printf("replicateState / actors.size() == %d\n", actorMap.size());
 	// std::cout << "replicateState / num actors in buffer: " << bufferLen / sizeof(ActorNetData) << std::endl;
 
@@ -733,7 +759,7 @@ void replicateState(char* buffer, int bufferLen)
 	}
 
 
-	std::cout << "replicateState / numActorsReceived: " << numActorsReceived << std::endl;
+	// std::cout << "replicateState / numActorsReceived: " << numActorsReceived << std::endl;
 
 
 	// -- Creating and Copying to stateSequenceID -- //
@@ -743,7 +769,7 @@ void replicateState(char* buffer, int bufferLen)
 	if (stateSequenceID == 0)
 	{
 		printf("	Received State: %d\n	Set State: %d\n", receivedStateSequenceID, stateSequenceID);
-		stateSequenceID = receivedStateSequenceID + 5;
+		stateSequenceID = receivedStateSequenceID + 5; 
 	}
 
 
@@ -753,6 +779,20 @@ void replicateState(char* buffer, int bufferLen)
 	{
 		ActorNetData data;
 		memcpy(&data, buffer, sizeof(data));
+
+
+
+		// TESTING
+		if (data.id != controlledActorID && bShouldPrintTime)
+		{
+			float spawnLatencyReturnTime = static_cast<float>(glfwGetTime());
+			spawnLatencySeconds = spawnLatencyReturnTime - spawnTimeStart;
+			std::cout << "TESTING - replicateState / spawnLatencySeconds: " << spawnLatencySeconds << std::endl;
+			bShouldPrintTime = false;
+		}
+		//~
+
+
 
 
 		if (data.bIsDestroyed) // -- Actor has been destroyed on the server -- //

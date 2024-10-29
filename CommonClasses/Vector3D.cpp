@@ -35,6 +35,14 @@ void Vector3D::Normalize()
 }
 
 
+Vector3D Vector3D::getNormal()
+{
+	float magnitude = sqrt((x * x) + (y * y) + (z * z));
+	if (magnitude == 0) return Vector3D(0.f);
+	return Vector3D(x / magnitude, y / magnitude, z / magnitude);
+}
+
+
 void Vector3D::zero()
 {
 	x = y = z = 0.f;
