@@ -6,7 +6,7 @@
 #include <cstdio>
 
 
-unsigned int Actor::nextId = 0;
+
 unsigned int Actor::numCachedModels = 0;
 Model* Actor::modelCache[256];
 bool Actor::bHasInitializedModelCache = false;
@@ -30,14 +30,15 @@ void Actor::loadModelCache()
 
 Actor* Actor::netDataToActor(ActorNetData data)
 {
-	Actor* actor = new Actor(data.Position, data.Rotation, data.blueprintID, true, data.id);
+	Actor* actor = new Actor(data.id, data.Position, data.Rotation, data.blueprintID, true);
 	return actor;
 }
 
 
-Actor::Actor(Vector3D _position, Vector3D _rotation, EActorBlueprintID _blueprintID, bool bSetModel, unsigned int _id)
-	: Position(_position), Scale(1.f), id(_id), blueprintID(_blueprintID)
+Actor::Actor(unsigned int _id, Vector3D _position, Vector3D _rotation, EActorBlueprintID _blueprintID, bool bSetModel)
+	: id(_id), Position(_position), Scale(1.f), blueprintID(_blueprintID)
 {
+	/* -- Attempt Setting Model -- */
 	if (bSetModel)
 	{
 		/* -- NOTE --
@@ -52,7 +53,7 @@ Actor::Actor(Vector3D _position, Vector3D _rotation, EActorBlueprintID _blueprin
 	}
 
 
-	/* Setting Rotation
+	/* -- Setting Rotation -- 
 	* Rotation must always be length of 1
 	*/
 	if (_rotation.length() == 0)
@@ -64,7 +65,7 @@ Actor::Actor(Vector3D _position, Vector3D _rotation, EActorBlueprintID _blueprin
 		Rotation = _rotation.getNormal();
 	}
 
-
+	/* -- Init properties from blueprint -- */
 	switch (blueprintID)
 	{
 	case ABI_PlayerCharacter:
@@ -75,27 +76,31 @@ Actor::Actor(Vector3D _position, Vector3D _rotation, EActorBlueprintID _blueprin
 	}
 	case ABI_Projectile:
 	{
-		moveSpeed = 30.f; // TEMP. 120.f
+		moveSpeed = 30.f; // 120.f
 		moveDirection = _rotation;
 		break;
 	}
 	case ABI_Asteroid:
 	{
 		Scale = 0.2; // Hardcode since asteroid model will never change
-		moveSpeed = 50.f;
+		moveSpeed = 0.f; // 50.f;
 		moveDirection  = _rotation;
 		break;
 	}
 	default:
 	{
 		// Is warning bc we may need a reason to create actor with custom settings.
-		printf("WARNING::Actor::Actor -- no blueprint type was passed. Requires manual construction");
+		printf("WARNING::Actor::Actor -- no blueprint type was passed");
 		moveSpeed = 0.f;
 		moveDirection.zero();
 		break;
 	}
 	}
 }
+
+
+
+
 
 
 Actor::~Actor()

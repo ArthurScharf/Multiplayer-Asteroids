@@ -10,7 +10,6 @@
 
 
 
-#define MAX_ACTORS 64
 
 
 
@@ -81,10 +80,17 @@ class Actor
 {
 // -- Static Members -- //
 private:
-	/* ID's are shared across the network */
-	static unsigned int nextId;
+	/*
+	* Mask for seperating the id of an actor from the network ownership of that actor.
+	* last two bits in an unsigned long are reserved to identify the owning client
+	* 
+	* bit starts at pos 0. Shift 28 to put in pos 29. -1 gives max number in 28 bits
+	*/
+	static const unsigned int idMask = (1 << 28) - 1; 
+
+	
 	/* cached models for constructing actor blueprints */
-	static Model* modelCache[256];
+	static Model* modelCache[256]; // TODO: 256 is too large. Should be shrunk massively once we know how many we're actually using
 	static unsigned int numCachedModels;
 	static bool bHasInitializedModelCache;
 
@@ -99,7 +105,7 @@ public:
 
 // -- Members -- //
 private:
-	unsigned int id; // prefix const
+	unsigned int id; // network ID
 	EActorBlueprintID blueprintID;
 	Vector3D Position;
 	Vector3D Rotation; // Should be a rotator. For now, is a Vector3D
@@ -113,12 +119,15 @@ private:
 public:
 	
 
-	/*
+	/* 
+	* 
 	* bSetModel : server doesn't render so this can be set to false
 	* _id : allows for control of the ID being set. Called by client when creating a proxy actor
 	*/
-	Actor(Vector3D _position, Vector3D _rotation, EActorBlueprintID _blueprintID = ABI_Default, bool bSetModel = false, unsigned int _id = ++nextId);
+	Actor(unsigned int _id, Vector3D _position, Vector3D _rotation, EActorBlueprintID _blueprintID = ABI_Default, bool bSetModel = false);
 	
+
+
 	~Actor();
 
 

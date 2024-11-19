@@ -28,19 +28,40 @@ UDPSocket sock;
 // I doubt any other kind of message will exceed the size of this type of message
 char sendBuffer[1 + sizeof(unsigned int) + (MAX_ACTORS * sizeof(ActorNetData))]{};
 char* recvBuffer{};
+// Stores the internet address for the currently being processed client
 sockaddr_in clientAddr;
 int clientAddr_len = sizeof(clientAddr);
-const unsigned int NUM_PACKETS_PER_CYCLE = 50;
+const unsigned int NUM_PACKETS_PER_CYCLE = 10;
 
 
 
 
 
-// TODO: This should be in definitions
+// TODO: This should be in definitions. Client.cpp should use this. Should be renamed to clientNetworkData
 /* Exists so client IP's can be used as key's in a client to actor map. */
 struct Client
 {
 	in_addr _in_addr;
+
+	/* A byte used to ID ownership of actors over the network.
+	* The most significant byte of each actor ID is set to reflect it's ownership.
+	* a value of 0 indicates the server owns the actor
+	*/
+	char clientNetworkID;
+
+	/*
+	* Predicted ID for the next actor created for a client.
+	* Each client must be able to predict the ID for actors it's spawning predictively.
+	* If all the clients shared the same pool of Network IDs, there would be no way
+	* for any client to predict an ID without there being a possibility of
+	* another client having already predicted that there spawned actor would use the same ID.
+	* Thus we split the ID's into 4 different pools using network ownership masks (see Definitions.h),
+	* 
+	* TODO: As of time of writing, it seems EXTREMELY unlikely that we'll ever use all of our IDs.
+	*       While this is bad to ignore, we're just going to assume it's never reached
+	*/
+	unsigned int nextActorNetworkID = 0;
+
 
 	/* Actor controlled by this client */
 	Actor* controlledActor = nullptr;
@@ -53,16 +74,30 @@ struct Client
 		return _in_addr.S_un.S_addr < other._in_addr.S_un.S_addr;
 	}
 	bool operator==(const Client& other) const { return _in_addr.S_un.S_addr == other._in_addr.S_un.S_addr; }
+
+	void setClientNetworkID(char _clientNetworkID)
+	{
+		// Is the input setting non-client-network-ID-bits?
+		if (~(((clientNetworkID << 24) & CLIENT_NETWORK_ID_MASK)) > 0)
+		{
+			printf("ERROR - Client::setClientNetworkID - passed");
+			return;
+		}
+		clientNetworkID = _clientNetworkID;
+	}
+
 };
 
 #define MAX_CLIENTS 4
 std::vector<Client> clients;
+std::vector<int> unclaimedClientNetworkIDs = { 0b00000001, 0b00000010, 0b00000011, 0b00000100 };
 unsigned int numReadyClients = 0;
 
 
+
+// -- Actors -- //
+
 std::vector<Actor*> actors;
-
-
 
 /* Stores the asteroids. Used to look for collision between player and asteroid */
 std::set<Actor*> asteroids; 
@@ -75,6 +110,7 @@ std::vector<ActorNetData> actorsDestroyedThisUpdate = {};
 
 
 
+// -- Time -- //
 using Time = std::chrono::steady_clock;
 //using ms = std::chrono::milliseconds;
 using float_sec = std::chrono::duration<float>;
@@ -90,6 +126,9 @@ bool bRunningStartGameTimer = false;
 int prevSecondsReached = 0; // This being here suggests we should encapsulate. Next time
 
 
+
+
+/* Stores remote procedure calls yet to be executed */
 std::map<unsigned int, std::vector<RemoteProcedureCall>> remoteProcedureCalls;
 
 
@@ -131,11 +170,15 @@ float_time_point getCurrentTime();
 // ---- SERVER ---- //
 int main()
 {
+	// -- Winsock Initialization -- //
 	sock.init(true);
 	sock.setRecvBufferSize(2000); // TODO: Arbitrary. Should be chosen more intelligently
 	clientAddr.sin_family = AF_INET;
 	clientAddr.sin_port = htons(4242);
 	bool bRunMainLoop = true;
+
+
+	// -- Main Loop -- //
 	while (bRunMainLoop)
 	{
 		switch (currentState)
@@ -176,6 +219,7 @@ void waitingForConnectionsLoop()
 {
 	while (currentState == SS_WaitingForConnections)
 	{
+		// -- Message Handling -- //
 		int numBytesRead;
 		recvBuffer = sock.recvData(numBytesRead, clientAddr);
 		if (numBytesRead > 0)
@@ -183,12 +227,13 @@ void waitingForConnectionsLoop()
 			handleMessage(recvBuffer, numBytesRead);
 		}
 		
+		// -- Start Game Timer -- //
 		if (bRunningStartGameTimer)
 		{
 			float currentSeconds = (getCurrentTime() - startTime).count(); // Seconds difference between start of epoch and now
 			if ((int)currentSeconds > prevSecondsReached) // Truncating float
 			{
-				prevSecondsReached = currentSeconds;
+				prevSecondsReached = static_cast<int>(currentSeconds); // truncation desired
 				printf("	%d\n", 2 - (int)currentSeconds);
 			}
 
@@ -341,7 +386,6 @@ void playingGameLoop()
 }
 
 
-
 // TODO: BUG: since I'm modifying the array while iterating (doing so with indices), this will create issues
 void moveActors(float deltaTime)
 {
@@ -474,15 +518,26 @@ void handleMessage(char* buffer, unsigned int bufferLen)
 		inet_ntop(AF_INET, &client._in_addr, ipStr, INET_ADDRSTRLEN);
 		printf("MSG_CONNECT -- Client IP: %s\n", ipStr);
 
+		if (clients.size() >= MAX_CLIENTS)
+		{
+			printf("  Maximum number of clients already connected\n");
+			break;
+		}
+
 		// -- Creating Controlled Actor & Associating it with its Client -- //
-		client.controlledActor = new Actor(Vector3D(0.f), Vector3D(0.f), ABI_PlayerCharacter);
+		client.controlledActor = new Actor(client.nextActorNetworkID++, Vector3D(0.f), Vector3D(0.f), ABI_PlayerCharacter, false);
+		client.clientNetworkID = unclaimedClientNetworkIDs[0];
+		clients.push_back(client); // Pushes a copy of local client onto `clients`.
+		unclaimedClientNetworkIDs.erase(unclaimedClientNetworkIDs.begin());
 		actors.push_back(client.controlledActor);
-		clients.push_back(client);
+
 
 		// -- Constructing & Sending Reply data -- //
 		char buffer[sizeof(ConnectAckData)];
 		ConnectAckData data;
 		data.controlledActorID = client.controlledActor->getId();
+		data.clientNetworkID = client.clientNetworkID;
+		std::cout << "client net id: " << data.clientNetworkID << std::endl;
 		memcpy(buffer, &data, sizeof(ConnectAckData));
 		sock.sendData(buffer, sizeof(ConnectAckData), clientAddr);
 		break;
@@ -549,36 +604,6 @@ void handleMessage(char* buffer, unsigned int bufferLen)
 		clientItr->controlledActor->setMoveDirection(netData.moveDirection);
 		break;
 	}
-	case MSG_SPAWN: // Client spawned an actor.
-	{
-		std::cout << "MSG_SPAWN" << std::endl;
-
-		// -- Is sender a connected client? -- //
-		auto clientItr = std::find(clients.begin(), clients.end(), client);
-		if (clientItr == clients.end())
-		{
-			printf("MSG_SPAWN / Sender isn't a connected client. Doing nothing\n");
-			return;
-		}
-
-		// -- Deformatting data & Spawning Actor -- // 
-		NetworkSpawnData data;
-		memcpy(&data, buffer + 1, sizeof(NetworkSpawnData));
-		Actor* clientActor = std::find(clients.begin(), clients.end(), client)->controlledActor;
-		Actor* projectile = new Actor(
-			clientActor->getPosition() + (clientActor->getRotation() * 100.f),
-			Vector3D(1.f, 0.f, 0.f),
-			ABI_Projectile
-		);
-		actors.push_back(projectile);
-		data.networkedActorID = projectile->getId();
-
-		// -- Sending Reply to Client -- //
-		memcpy(sendBuffer, &data, sizeof(NetworkSpawnData));
-		sock.sendData(sendBuffer, sizeof(NetworkSpawnData), clientAddr);
-
-		break;
-	}
 	case MSG_RPC:
 	{
 		std::cout << "MSG_RPC " << std::endl;
@@ -610,31 +635,33 @@ void handleRPC(RemoteProcedureCall rpc)
 {
 	std::cout << "handleRPC" << std::endl;
 
-	Client client;
-	client._in_addr = clientAddr.sin_addr;
+	
+
+	// -- Finding Client -- //
+	Client* clientPtr = nullptr;
+	for (int i = 0; i < clients.size(); i++)
+	{
+		if (clients[i]._in_addr.S_un.S_addr == clientAddr.sin_addr.S_un.S_addr) // Does this work?
+		{
+			clientPtr = &clients[i];
+		}
+	}
+	if (clientPtr == nullptr) 
+	{  // Client that sent the RPC not found
+		printf("WARNING::handleRPC -- clientAddr.sin_addr.S_un.S_addr doesn't correspond to any connected clients");
+		return;
+	}
+
 	switch (rpc.method)
 	{
 		case RPC_SPAWN:
 		{
 			printf("handleRPC -- Spawn Projectile\n");
-			// -- Spawning Actor -- // 
-			Actor* clientActor = std::find(clients.begin(), clients.end(), client)->controlledActor;
 
-			if (!clientActor)
-			{
-				printf("ERROR::handleRPC -- clientActor == nullptr\n");
-				return;
-			}
-
-			// BUG: Is Spawning at the actor's current location, not the location that it was when it spawned the projectile
-
-			// TESTING
-			std::cout << "handleRPC / rotation: " << clientActor->getRotation().toString() << std::endl;
-			std::cout << "handleRPC / rotation * dist: " << (clientActor->getRotation() * 200.f).toString() << std::endl;
-
-
+			/* --Spawning Projectile-- */
 			Actor* projectile = new Actor(
-				clientActor->getPosition() + (clientActor->getRotation() * 5000.f),
+				clientPtr->nextActorNetworkID++,
+				clientPtr->controlledActor->getPosition() + (clientPtr->controlledActor->getRotation() * 10.f),
 				Vector3D(1.f, 0.f, 0.f),
 				ABI_Projectile,
 				false
@@ -650,6 +677,5 @@ float_time_point getCurrentTime()
 {
 	return Time::now(); // Implicitly casting
 }
-
 
 
