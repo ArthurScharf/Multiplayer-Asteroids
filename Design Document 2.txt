@@ -103,3 +103,41 @@ Is the size of the client-buffer, which stores the incoming actor data, correctl
 	> NO! It was arbitrarily set to 200. This number must be properly selected
 
 
+
+
+
+
+
+----- Handling Projectile Displacement -----
+
+Problem: THe client being some k simulation steps ahead of the server means there is implicit latency between a projectile
+         being fired and the server performing the spawn for the projectile. 
+         Further, any actor data received from the server is always out of date.
+         THis means the true projectile's position will be behind that of the spawned proxy.
+         
+Solution: Proxies are spawned with less of an offset from the player character than their actual server counterpart.
+          This gives the illusion of the projectile existing instantly for the user, while allowing the data received from the server
+          to approximately match the position of the proxy
+
+
+
+
+
+
+
+----- Proxy Network Ownership ------
+Problem : With the context-client being ahead of the server and its peers, predicting the networkID of a proxies true copy becomes difficult.
+          It's always possible that at the real world time of sending a spawn RPC, another peer has done the same, and sooner, resulting in 
+          that peers spawned actor getting the networkID that the context-client thought it would receive.
+
+Solution : Each client has it's own list of network IDs for actors it owns. 
+           Each client will use any actors network ID, but having an ID bit representing ownership means we'll only predict ID's that belong to us
+
+Implementation : Server maintains subsets of the Actors set for each connected client.
+		 
+
+
+
+		 
+
+

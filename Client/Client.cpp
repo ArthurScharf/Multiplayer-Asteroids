@@ -51,11 +51,26 @@ bool bIsConnectedToServer = false;
 char sendBuffer[1 + (MAX_ACTORS * sizeof(Actor))];
 char* recvBuffer{};
 int numBytesRead = -1; // TODO: This might be a duplicate of another variable
-const unsigned int NUM_PACKETS_PER_CYCLE = 50; // 10
+const unsigned int NUM_PACKETS_PER_CYCLE = 10; // 10
+
+/*
+* Byte used to ID owned actors over the network
+*/
+int clientNetworkID;
+
 
 
 
 // ----- Actors ----- //
+
+/*
+* The next ID the client believes the server will use when the client
+* asks the server to create an actor it owns, predicting that actors ID.
+* The server should create an actor with the same idea.
+* When replicate state is received, the client looks to replace delete any proxy with an ID that belongs to
+* it and instantiate a new actor using the data being received from the server
+*/
+unsigned int nextPredictedOwnedActorNetworkID = 0;
 
 // KEY : Actor Network ID	| VALUE : The corresponding actor 
 std::map<unsigned int, Actor*> actorMap;
@@ -65,6 +80,9 @@ bool bPlayerActorIDSet = false;
 // Pointer to actor being controlled by this client. Avoids repeated lookups using controlledActorID
 Actor* playerActor = nullptr;
 
+/* ! DEPRECATED	!
+* TODO: Remove this
+*/
 unsigned int nextProxyID = 0;
 // Key: proxyID / Value: Proxy
 std::map<unsigned int, Actor*> unlinkedProxies;
@@ -95,8 +113,6 @@ bool bRunMainLoop = true;
 /* Stores the states created by the client at each fixed update.
  * Used with incoming states from the server to compare for discrepencies */
 CircularBuffer stateBuffer;
-
-
 
 
 
@@ -466,9 +482,11 @@ void processInput(GLFWwindow* window)
 		// -- Actions -- //
 		if (glfwGetKey(window, GLFW_KEY_J) == GLFW_PRESS && !bFireButtonPressed)
 		{
+#if PROXIES
 			// TESTING
 			bShouldPrintTime = true;
 			//~
+#endif
 			spawnProjectile();
 			bFireButtonPressed = true;
 		}
@@ -484,7 +502,6 @@ void processInput(GLFWwindow* window)
 
 			
 			std::cout << "processInpput / test key pressed" << std::endl;
-			actorMap.size();
 
 			//std::cout << "handleInput / T" << std::endl;
 			//bTestButtonPressed = true;
@@ -527,11 +544,11 @@ void spawnProjectile()
 
 	// ---- Constructing Unlinked Proxy ---- //
 	Actor* projectile = new Actor(
-		playerActor->getPosition() + (playerActor->getRotation() * 1.f), // Offset is less so true actor and proxy are at approximately the same position on the client
+		++nextProxyID,
+		playerActor->getPosition() + (playerActor->getRotation() * 10.f), // Offset is less so true actor and proxy are at approximately the same position on the client 2.f
 		playerActor->getRotation(),
 		ABI_Projectile,
-		true,
-		++nextProxyID
+		true
 	);
 	projectile->setMoveDirection(Vector3D(1.f, 0.f, 0.f));
 	unlinkedProxies.insert({ nextProxyID, projectile });
@@ -595,6 +612,7 @@ void moveActors(float deltaTime)
 
 
 	// TODO: Why do I have a separate collection for proxies? Wouldn't it make more sense to identify them some other way?
+	// TODO: Extending this thought; proxies will likely use a lot of similar code. Having them be treated as actors normally avoids code reuse
 
 	// ---- Moving Unlinked Proxies ---- //
 	for (auto iter = unlinkedProxies.begin(); iter != unlinkedProxies.end(); iter++)
@@ -665,18 +683,27 @@ void readRecvBuffer()
 char handleMessage(char* buffer, unsigned int bufferLen)
 {
 	// std::cout << "handleMessage / bufferLen: " << bufferLen << std::endl;
-	char handledMessage;
+	// char handledMessage;
 	switch (buffer[0])
 	{
 	case MSG_CONNECT:	// Connection Reply
 	{
-		printf("handleMessage / MSG_CONNECT\n");
+		/* -- NOTE --
+		* Ideally, controlledActorID will always be ID 0 from this clients pool of network IDs.
+		* I haven't bothered to logically confirm that this will always happen
+		* so instead I set the next predicted network ID to the received ID + 1,
+		* just to be safe
+		*/
 
+		printf("handleMessage / MSG_CONNECT\n");
 		ConnectAckData data;
 		memcpy(&data, recvBuffer, sizeof(ConnectAckData));
 		controlledActorID = data.controlledActorID;
 		bPlayerActorIDSet = true;
-		printf("	/ controlledActorID: %d\n", controlledActorID);
+		printf("    > controlledActorID: %d\n", controlledActorID);
+		nextPredictedOwnedActorNetworkID = controlledActorID + 1;
+		clientNetworkID = data.clientNetworkID;
+		printf("    > clientNetworkID: %d\n", clientNetworkID);
 		currentState = CS_WaitingForGameStart;
 		return MSG_CONNECT;
 	}
@@ -713,30 +740,28 @@ char handleMessage(char* buffer, unsigned int bufferLen)
 		printf("handleMessage / MSG_ID : controlledActorID: %d\n", controlledActorID);
 		return MSG_ID;
 	}
-	case MSG_SPAWN:
-	{
-		printf("handleMessage / MSG_SPAWN\n");
-
-		/* Reply to Spawn Request
-		*  Links locally spawned dummy with authoritative server copy
-		*/
-		NetworkSpawnData data;
-		memcpy(&data, buffer, sizeof(NetworkSpawnData));
-
-
-#if PROXIES
-		/*
-		unlinked proxy becomes a normal actor. This avoids the overhead cost of constructing a new actor when required
-		*/
-		Actor* linkedActor = unlinkedProxies[data.dummyActorID];
-		linkedActor->setId(data.networkedActorID);
-		actorMap[data.networkedActorID] = linkedActor;
-		unlinkedProxies.erase(data.dummyActorID);
-
-		printf("  (dummyActorID, networkedActorID) : (%d , %d)\n", data.dummyActorID, data.networkedActorID);
-		return MSG_SPAWN;
-#endif
-	}
+//	case MSG_SPAWN:
+//	{
+//		printf("handleMessage / MSG_SPAWN\n");
+//
+//		/* Handling server Reply for Spawn Request
+//		*  Links locally spawned dummy with authoritative server copy
+//		*/
+//		NetworkSpawnData data;
+//		memcpy(&data, buffer, sizeof(NetworkSpawnData));
+//#if PROXIES
+//		/*
+//		unlinked proxy becomes a normal actor. This avoids the overhead cost of constructing a new actor when required
+//		*/
+//		Actor* linkedActor = unlinkedProxies[data.dummyActorID];
+//		linkedActor->setId(data.networkedActorID);
+//		actorMap[data.networkedActorID] = linkedActor;
+//		unlinkedProxies.erase(data.dummyActorID);
+//
+//		printf("  (dummyActorID, networkedActorID) : (%d , %d)\n", data.dummyActorID, data.networkedActorID);
+//		return MSG_SPAWN;
+//#endif
+//	}
 	}
 }
 
@@ -781,7 +806,8 @@ void replicateState(char* buffer, int bufferLen)
 		memcpy(&data, buffer, sizeof(data));
 
 
-
+		
+#if PROXIES
 		// TESTING
 		if (data.id != controlledActorID && bShouldPrintTime)
 		{
@@ -791,19 +817,27 @@ void replicateState(char* buffer, int bufferLen)
 			bShouldPrintTime = false;
 		}
 		//~
+#endif
 
 
-
-
-		if (data.bIsDestroyed) // -- Actor has been destroyed on the server -- //
+		// -- Observerving type of data received -- //
+		if (data.bIsDestroyed) // Actor has been destroyed on the server 
 		{
 			destroyActor(data.id);
 		}
-		else if (actorMap.count(data.id) == 0) // -- New Actor Encountered -- //
+		else if (actorMap.count(data.id) == 0) // New Actor Encountered
 		{
 			// -- Add actor to map -- //
-			actor = new Actor(data.Position, data.Rotation, data.blueprintID, true, data.id);
+			actor = new Actor(data.id, data.Position, data.Rotation, data.blueprintID, true);
 			actorMap[data.id] = actor;
+
+			// Is there a corresponding proxy that can be deleted?
+			if (unlinkedProxies.count(data.id) != 0)
+			{
+				// delete proxy
+				// delete unlinkedProxies[data.id];
+				// unlinkedProxies.erase(unlinkedProxies.find(data.id));
+			}
 		}
 		else // -- Actor found. Updating Actor data -- //
 		{
