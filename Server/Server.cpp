@@ -75,17 +75,25 @@ struct Client
 	}
 	bool operator==(const Client& other) const { return _in_addr.S_un.S_addr == other._in_addr.S_un.S_addr; }
 
+
 	void setClientNetworkID(char _clientNetworkID)
 	{
 		// Is the input setting non-client-network-ID-bits?
 		if (~(((clientNetworkID << 24) & CLIENT_NETWORK_ID_MASK)) > 0)
 		{
-			printf("ERROR - Client::setClientNetworkID - passed");
+			printf("ERROR - Client::setClientNetworkID - passed network ID was too large. Would have overwritten non-client-network-bits");
 			return;
 		}
 		clientNetworkID = _clientNetworkID;
 	}
 
+	// returns the combined client id and next actor id. increments the next actor ID by 1
+	unsigned int getNextCombinedNetworkID()
+	{
+		unsigned int out_id = clientNetworkID | nextActorNetworkID;
+		nextActorNetworkID++;
+		return out_id;
+	}
 };
 
 #define MAX_CLIENTS 4
@@ -97,10 +105,10 @@ unsigned int numReadyClients = 0;
 
 // -- Actors -- //
 
-std::vector<Actor*> actors;
+/* Used to generate server owned actors */
+unsigned int nextActorNetworkID_Server = 0;
 
-/* Stores the asteroids. Used to look for collision between player and asteroid */
-std::set<Actor*> asteroids; 
+std::vector<Actor*> actors;
 
 /* Stores net data for all actors during the interval between the previous fixed update and the current update.
 *  Actor's net data is stored here before being deleted. 
@@ -191,6 +199,12 @@ int main()
 		}
 		case SS_PlayingGame:
 		{
+			//actors.push_back(new Actor(
+			//	nextActorNetworkID_Server++,
+			//	Vector3D(40.f, 25.f, 0),
+			//	Vector3D(),
+			//	EActorBlueprintID::ABI_Asteroid
+			//));
 			printf("Beginning Game\n");
 			playingGameLoop();
 			break;
@@ -314,7 +328,7 @@ void playingGameLoop()
 
 		// -- Updating Actors -- //
 		moveActors(deltaTime);
-		checkForCollisions(); // Potentially pushes actors onto `actorsDestroyedThisUpdate`
+		// checkForCollisions(); // Potentially pushes actors onto `actorsDestroyedThisUpdate`
 
 
 		// -- Fixed Frequency Update -- //
@@ -327,20 +341,20 @@ void playingGameLoop()
 			stateSequenceID++;
 
 			// ---- Spawning Asteroids ---- //
-			/*
-			if ((stateSequenceID % 40) == 0)
-			{	// Spawn Asteroid
-				// std::cout << "TEST" << std::endl;
-				Actor* asteroid = new Actor(
-					Vector3D(0.f, 50.f, 25.f),
-					Vector3D(0.f, -1.f, 0.f),
-					ABI_Asteroid,
-					false
-				);
-				actors.push_back(asteroid);
-				asteroids.insert(asteroid);
-			};
-			*/
+			
+			//if ((stateSequenceID % 40) == 0)
+			//{	// Spawn Asteroid
+			//	// std::cout << "TEST" << std::endl;
+			//	Actor* asteroid = new Actor(
+			//		10 + nextActorNetworkID_Server++,
+			//		Vector3D(0.f, 50.f, 25.f),
+			//		Vector3D(0.f, -1.f, 0.f),
+			//		ABI_Asteroid,
+			//		false
+			//	);
+			//	actors.push_back(asteroid);
+			//};
+			
 
 			// -- Sending Snapshot to Clients -- //
 			if (clients.size() <= 0) return;
@@ -538,7 +552,13 @@ void handleMessage(char* buffer, unsigned int bufferLen)
 		}
 
 		// -- Creating Controlled Actor & Associating it with its Client -- //
-		client.controlledActor = new Actor(client.nextActorNetworkID++, Vector3D(0.f), Vector3D(0.f), ABI_PlayerCharacter, false);
+		client.controlledActor = new Actor(
+			client.getNextCombinedNetworkID(),
+			Vector3D(0.f), 
+			Vector3D(0.f), 
+			ABI_PlayerCharacter, 
+			false
+		);
 		client.clientNetworkID = unclaimedClientNetworkIDs[0];
 		clients.push_back(client); // Pushes a copy of local client onto `clients`.
 		unclaimedClientNetworkIDs.erase(unclaimedClientNetworkIDs.begin());
@@ -673,7 +693,7 @@ void handleRPC(RemoteProcedureCall rpc)
 
 			/* --Spawning Projectile-- */
 			Actor* projectile = new Actor(
-				clientPtr->nextActorNetworkID++,
+				clientPtr->getNextCombinedNetworkID(),
 				clientPtr->controlledActor->getPosition() + (clientPtr->controlledActor->getRotation() * 10.f),
 				Vector3D(1.f, 0.f, 0.f),
 				ABI_Projectile,

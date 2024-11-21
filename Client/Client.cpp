@@ -10,6 +10,7 @@
 #include <thread>
 #include <map>
 #include <set>
+#include <bitset>
 
 #include "Camera.h"
 
@@ -545,7 +546,7 @@ void spawnProjectile()
 	// ---- Constructing Unlinked Proxy ---- //
 	Actor* projectile = new Actor(
 		++nextProxyID,
-		playerActor->getPosition() + (playerActor->getRotation() * 10.f), // Offset is less so true actor and proxy are at approximately the same position on the client 2.f
+		playerActor->getPosition() + (playerActor->getRotation() * 2.f), // Offset is less so true actor and proxy are at approximately the same position on the client 2.f
 		playerActor->getRotation(),
 		ABI_Projectile,
 		true
@@ -700,7 +701,7 @@ char handleMessage(char* buffer, unsigned int bufferLen)
 		memcpy(&data, recvBuffer, sizeof(ConnectAckData));
 		controlledActorID = data.controlledActorID;
 		bPlayerActorIDSet = true;
-		printf("    > controlledActorID: %d\n", controlledActorID);
+		printf("    > controlledActorID: %u\n", (!CLIENT_NETWORK_ID_MASK) & controlledActorID);
 		nextPredictedOwnedActorNetworkID = controlledActorID + 1;
 		clientNetworkID = data.clientNetworkID;
 		printf("    > clientNetworkID: %d\n", clientNetworkID);

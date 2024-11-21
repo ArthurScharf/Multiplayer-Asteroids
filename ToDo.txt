@@ -1,12 +1,5 @@
-Finish creating test asteroid inside server::main
-	
-finish implementing 
-
-
-
-
-
-
+How do I write an output logger? I'm sick of rerunning the 
+program. 
 
 
 ----------  KEY ---------- 

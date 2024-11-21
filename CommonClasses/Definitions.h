@@ -17,7 +17,7 @@
 /* Mask for actor id in a network ID.
 *  0000 == Server owned
 */
-#define CLIENT_NETWORK_ID_MASK (1 << 24) - 1
+#define CLIENT_NETWORK_ID_MASK !((1 << 24) - 1)
 
 
 
