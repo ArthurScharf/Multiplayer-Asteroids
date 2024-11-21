@@ -1,6 +1,6 @@
-`clients` in Server aren't having their controlled actors being correctly assigned. They're NULL
-
-
+Finish creating test asteroid inside server::main
+	
+finish implementing 
 
 
 
@@ -50,31 +50,6 @@
 
 
 
----------- Proxy Network Ownership ----------
-
-1. Clients should be properly assigned network IDs upon connection	X
-	- Server should maintain pool		X
-	- Disconnection isn't handled at the moment. We can worry about this later
-	- Clients need to be findable based on their ipaddress. We shouldn't be creating a new client object each time we receive a message
-
-
-2. Actor ID's shouldn't allow for accidentally overwriting bits reserved for network ownership During Spawn
-	- network ID assignments to actors is done in the server and client. Server and client should both have a way of handling this
-	  > A subroutine in both server and client to guarantee that this never happens, is probably best
-
-3. Server should assign network ownership bits when a client connects
-
-4. Server must create controlled player character actor using an ID that is compliant with the design
-	- Client now sets nextPredictedOwnedActorNetworkID to controlledActorID + 1 once connection is established
-	- 
-
-
-
-_. Clients should predict network ID when constructing proxies
-_. Clients should destroy proxies when receiving the true actor data
-
-
-
 
 
 
@@ -82,6 +57,14 @@ _. Clients should destroy proxies when receiving the true actor data
 
 
 [ ] Modify program to make proper use of Client struct, rather than associating information together using a map
+
+
+
+
+
+
+
+
 
 
 

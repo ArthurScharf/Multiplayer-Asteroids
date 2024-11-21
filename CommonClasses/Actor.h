@@ -113,7 +113,7 @@ private:
 	Vector3D moveDirection; // Normalized vector choosing which direction this actor moves
 	float moveSpeed;
 	Model* model;
-	
+	float collisionRadius;
 
 // -- Methods, Constructors, Destructors -- //
 public:
@@ -178,6 +178,10 @@ public:
 	}
 	
 	void setModel(Model* _model) { model = _model; }
+
+	float getCollisionRadius() { return collisionRadius; }
+
+	EActorBlueprintID getBlueprintID() { return blueprintID; }
 
 // -- Operators -- //
 	bool operator==(Actor* other)

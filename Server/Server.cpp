@@ -439,56 +439,69 @@ void moveActors(float deltaTime)
 // This method is still hot garbage. It doesn't check for collisions between anything other than asteroids and playerActors
 void checkForCollisions()
 {
-	std::vector<Client>::iterator clientItr = clients.begin();
-	while ( clientItr != clients.end() )
+	
+	//-- Sort into temporary containers		NOTE: It would be faster if the actors were pre-sorted, of if there was a better way to sort them
+	std::vector<Actor*> nonAsteroids;
+	std::vector<Actor*> asteroids;
+	for (Actor* actorPtr : actors)
 	{
-		if (!clientItr->controlledActor) // Skips clients that aren't controlling anything
+		if (actorPtr->getBlueprintID() == EActorBlueprintID::ABI_Asteroid)
 		{
-			clientItr++;
-			continue;
+			asteroids.push_back(actorPtr);
 		}
-		std::set<Actor*>::iterator asteroidItr = asteroids.begin();
-		while (asteroidItr != asteroids.end())
+		else
 		{
-			// -- Checking for Collision between Client Actor & any Asteroid -- //
-			Vector3D v1 = clientItr->controlledActor->getPosition();	// BUG: This can sometimes be pointing to end() while it's being dereferenced
-			Vector3D v2 = (*asteroidItr)->getPosition(); // Weird dereference bc we're storing pointers while using iterators
-			v1.z = v2.z = 0.f; // Height is just cosmetic
-			if ((v1 - v2).length() <= 20.f) 
+			nonAsteroids.push_back(actorPtr);
+		}
+	}
+
+
+	//-- Brute force search for collisions
+	std::vector<Actor*>::iterator asteroidItr;
+	std::vector<Actor*>::iterator nonAsteroidItr;
+	for (asteroidItr = asteroids.begin(); asteroidItr != asteroids.end();)
+	{
+		for (nonAsteroidItr = nonAsteroids.begin(); nonAsteroidItr != nonAsteroids.end();)
+		{
+			// If the length of the difference vector of the positions of the two actors is less than the sum of their collision radii, then they have collided
+			if (((*asteroidItr)->getPosition() - (*nonAsteroidItr)->getPosition()).length() >= (*asteroidItr)->getCollisionRadius() + (*nonAsteroidItr)->getCollisionRadius())
 			{
-				// -- Updating actorsDestroyedThisUpdate -- //
-				ActorNetData clientActorData = clientItr->controlledActor->toNetData();
-				clientActorData.bIsDestroyed = true; // Queueing the actor to be destroyed later
-				actorsDestroyedThisUpdate.push_back(clientActorData);
+				// Creating net data for the two destroyed actors and placing this data in the container
+				ActorNetData data = (*asteroidItr)->toNetData();
+				data.bIsDestroyed = true;
+				actorsDestroyedThisUpdate.push_back(data);
+				data = (*nonAsteroidItr)->toNetData();
+				data.bIsDestroyed = true;
+				actorsDestroyedThisUpdate.push_back(data);
 
-				ActorNetData asteroidNetData = (*asteroidItr)->toNetData();
-				asteroidNetData.bIsDestroyed = true;
-				actorsDestroyedThisUpdate.push_back(asteroidNetData);
 
-				// -- Removing Destroyed Actors from Actor & Deleting them -- //
-				auto controlledActorItr = std::find(actors.begin(), actors.end(), clientItr->controlledActor);
-				actors.erase(controlledActorItr);
-				delete clientItr->controlledActor;
-				clientItr->controlledActor = nullptr;
+				// If client controlled. Handling client destruction. 
+				// NOTE: Would be better if actors had a pointer to an owning client. Wouldn't have to search clients. Since num clients is small, this is ok
+				for (Client &client : clients)
+				{
+					// If actor that collided was owned, disown it
+					if (client.controlledActor = (*nonAsteroidItr))
+					{
+						client.controlledActor = nullptr;
+						break;
+					}
+				}
 
-				// BUG: asteroidFromVector is somehow being set to actors.end()
-				auto asteroidFromVector = std::find(actors.begin(), actors.end(), *asteroidItr);
-				actors.erase(asteroidFromVector);
+				// destroying the actors
 				delete (*asteroidItr);
-				asteroidItr = asteroids.erase(asteroidItr); // Increments the iterator
-				
-				/*
-				* We've destroyed the current client actor so it is pointless to continue to 
-				* to compare more asteroids to it.
-				* Thus, we leave the asteroid loop, and repeat the process for the next
-				* actor-controlling client
-				*/
-				break;
+				delete (*nonAsteroidItr);
+
+				// Deleting the actors from their respective temporary containers
+				asteroidItr    = asteroids.erase(asteroidItr);
+				nonAsteroidItr = nonAsteroids.erase(nonAsteroidItr);
 			}
-			asteroidItr++; // This occurs only if an asteroid hasn't been destroyed
-		}//~ Asteroid loop
-		clientItr++;
-	}//~ Client loop
+			else
+			{
+				asteroidItr++;
+				nonAsteroidItr++;
+			}
+		}//~ inner collision loop
+	}//~ outer collision loop
 }
 
 
