@@ -183,3 +183,29 @@ Client is ahead, there are collisions that could happen that won't look right
 
 
 
+
+
+
+
+
+
+
+
+
+
+-------------------------- Problem 3 -------------------------
+
+Problem: RPC's are received ahead in time. They must wait to 
+         be processed. 
+	 RPC's will often need to be executed using the 
+         state of the world when they were called,
+         not when they are processed. This means
+         the server must either
+	 1. Store a state history and use this history
+	 
+
+SOLUTION: the RPCs when received could 
+
+
+
+

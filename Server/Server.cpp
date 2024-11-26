@@ -668,8 +668,6 @@ void handleRPC(RemoteProcedureCall rpc)
 {
 	std::cout << "handleRPC" << std::endl;
 
-	
-
 	// -- Finding Client -- //
 	Client* clientPtr = nullptr;
 	for (int i = 0; i < clients.size(); i++)

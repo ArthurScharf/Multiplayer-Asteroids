@@ -692,10 +692,8 @@ char handleMessage(char* buffer, unsigned int bufferLen)
 		/* -- NOTE --
 		* Ideally, controlledActorID will always be ID 0 from this clients pool of network IDs.
 		* I haven't bothered to logically confirm that this will always happen
-		* so instead I set the next predicted network ID to the received ID + 1,
-		* just to be safe
+		* so instead I set the next predicted network ID to the received ID + 1, just to be safe
 		*/
-
 		printf("handleMessage / MSG_CONNECT\n");
 		ConnectAckData data;
 		memcpy(&data, recvBuffer, sizeof(ConnectAckData));
