@@ -10,7 +10,7 @@
 #include <thread>
 #include <map>
 #include <set>
-#include <bitset>
+#include <bitset> // For testing. Remove later Should use pre-processor commands with DEBUG to automate this
 
 #include "Camera.h"
 
@@ -25,6 +25,9 @@
 
 #include "GameState.h"
 #include "CircularBuffer.h"
+
+
+
 
 
 #pragma comment(lib, "ws2_32.lib") // What is this doing?
@@ -146,7 +149,7 @@ int initRendering();
 /* Renders the game to the window */
 void Render();
 
-void processInput(GLFWwindow* window);
+char processInput(GLFWwindow* window);
 void spawnProjectile();
 void destroyActor(unsigned int id);
 void moveActors(float deltaTime); // Moves the actors locally. Lower priority actor update than the fixed updates
@@ -292,6 +295,7 @@ void playingGameLoop()
 *  point at which the main loop began to run.
 */
 	lastFrame = static_cast<float>(glfwGetTime());
+	char inputThisFrame = 0b00000000;
 
 	while (currentState == CS_PlayingGame)
 	{
@@ -301,7 +305,9 @@ void playingGameLoop()
 		lastFrame = currentFrame;
 		elapsedTimeSinceUpdate += deltaTime;
 
-		processInput(window);
+		inputThisFrame = processInput(window);
+
+		std::cout << std::bitset<8>(inputThisFrame) << std::endl;
 		// moveActors(deltaTime); TEST
 
 		Render();
@@ -415,13 +421,17 @@ void Render()
 }
 
 
-void processInput(GLFWwindow* window)
+/* This function returns values that are only ever used when the function is called during
+ * the CS_PlayingGame state. I've left it this way to cut corners. It works well enough for now 
+ */
+char processInput(GLFWwindow* window)
 {
+	char inputBitString = 0b00000000;
+
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 	{
 		currentState = CS_Exit;
 	}
-
 
 	/*
 	* This approach to controlling input based on the state of the program could be done more cleanly
@@ -448,7 +458,7 @@ void processInput(GLFWwindow* window)
 		// Only process Movement & gameplay action input if controlling character
 		if (playerActor == nullptr)
 		{
-			return;
+			return inputBitString;
 		}
 
 		// -- Movement -- //
@@ -456,19 +466,25 @@ void processInput(GLFWwindow* window)
 		if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 		{
 			moveDirection += Vector3D(0.f, 1.f, 0.f);
+			inputBitString |= INPUT_UP;
 		}
 		if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
 		{
 			moveDirection += Vector3D(0.f, -1.f, 0.f);
+			inputBitString |= INPUT_DOWN;
 		}
 		if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
 		{
 			moveDirection += Vector3D(1.f, 0.f, 0.f);
+			inputBitString |= INPUT_RIGHT;
 		}
 		if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
 		{
 			moveDirection += Vector3D(-1.f, 0.f, 0.f);
+			inputBitString |= INPUT_LEFT;
 		}
+
+		/* TODO: Eventually remove. These are left here for use with testing later. */
 		if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
 		{
 			moveDirection += Vector3D(0.f, 0.f, -1.f);
@@ -490,6 +506,7 @@ void processInput(GLFWwindow* window)
 			//~
 #endif
 			spawnProjectile();
+			inputBitString |= INPUT_SHOOT;
 			bFireButtonPressed = true;
 		}
 		else if (glfwGetKey(window, GLFW_KEY_J) == GLFW_RELEASE)
@@ -497,7 +514,7 @@ void processInput(GLFWwindow* window)
 			bFireButtonPressed = false;
 		}
 
-
+		// TODO: for testing. Remove later 
 		if (glfwGetKey(window, GLFW_KEY_T) == GLFW_PRESS && !bTestButtonPressed)
 		{
 			bTestButtonPressed = true;
@@ -523,7 +540,11 @@ void processInput(GLFWwindow* window)
 		{
 			bTestButtonPressed = false;
 		}
-	}
+
+		
+	}//~ playing game loop
+
+	return inputBitString;
 }
 
 

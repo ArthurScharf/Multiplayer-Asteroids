@@ -22,13 +22,18 @@ Starting Point: Client receives a state and simply sets it's state to that state
 [ ] Rework movement so loop of main on client is processed as a desired input bit string
 	[x] Create the appropriate input struct for the client to update the server with
 	[x] create bitmasks for different user inputs
-	
+ 
+	>.  Remember that the server must track the delta time between the beginning of the current FFU and the moment 
+	    an input request is received from the client. This is used to calculate the delta time for that specific update
+ 
 [ ] Store these bitstrings on the server and batch process them. Reply with correct state.
     This reply should include ACK for most recent handled request.
     At this point, the client can simply apply the most recently processed state to it's current position
 
 [ ] Client should store its requests and ack them using incoming updates
 
+( ) delay processing of peer-actor data by at least one frame to allow for interpolation. This step should expand to 
+    implementing said interpolation
 
 
 
