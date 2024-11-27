@@ -2,7 +2,15 @@
 
 
 
-
+/*
+* This file is a list of definitions commonly used by both the server and the client.
+* Many of the structs here are meant to make the networking code cleaner when sending 
+* and unpacking data.
+* While the client and the server both use the same MSG types, they will sometimes
+* send/receive different packages respectively. This type of struct will always
+* be denoted with a snake-case suffix like "_server" or "_client".
+* The suffix denotes which process sends the packet
+*/
 
 
 
@@ -10,8 +18,8 @@
 // --------------------------------------------------- //
 // ---------- General Structs & Definitions ---------- //
 // --------------------------------------------------- //
-#define MAX_PLAYERS 4
 
+#define MAX_PLAYERS 4
 #define MAX_ACTORS 64
 
 /* Mask for actor id in a network ID.
@@ -19,23 +27,19 @@
 */
 #define CLIENT_NETWORK_ID_MASK !((1 << 24) - 1)
 
+/* The input masks used to read the input bit-string sent by the client each frame, and read by the server */
+#define INPUT_UP    0b00000001
+#define INPUT_DOWN  0b00000010
+#define INPUT_LEFT  0b00000100
+#define INPUT_RIGHT 0b00001000
+#define INPUT_SHOOT 0b00010000
 
 
+// ----------------------------------------------- //
+// ---------- Message & RPC Definitions ---------- //
+// ----------------------------------------------- //
 
-
-
-
-
-
-
-
-
-
-// ------------------------------------------------------ //
-// ---------- Networking Structs & Definitions ---------- //
-// ------------------------------------------------------ //
-
-// ---- Message Types ---- //
+/* Message types. Often used in their respective structs. Here for readability. RPCs are also included */
 #define MSG_CONNECT 0x001		// Connection request/confirmation
 #define MSG_TSTEP   0x002		// Simulation Step request/reply. This data is shared in STRTGM, but we may want to sometimes retreive this information on it's own
 #define MSG_REP     0x003		// Client state change request / server state replication
@@ -45,51 +49,7 @@
 #define MSG_RPC		0x007		// Remote Procedure Call
 #define MSG_STRTGM  0x008		// Client --> Server : Client is ready to start game | Server --> Client, game has started
 
-
-// ---- RPCs ---- //	
-#define RPC_SPAWN    0x001	// For Debugging
-
-
-
-
-
-// MSG_REP
-struct StateData
-{
-private:
-	char messageType = MSG_REP;
-
-public:
-	char data[1 + MAX_ACTORS]; // 1+ to allow room for character that separates owned actors from non-owned actors
-};
-
-
-
-
-
-
-/*
-* The Header for all RPC messages
-*/
-struct RemoteProcedureCall
-{
-private:
-	char messageType = MSG_RPC;
-
-public:
-	/* Which RPC will be called*/
-	char method; 
-
-	/* Simulation Step the RPC is being called during */
-	unsigned int simulationStep; 
-
-	/* Seconds after the last fixed frequency update completed */
-	float secondsSinceLastUpdate;
-
-	/* Dynamic to allow different sizes of RPC message bodies to be used without wasting space */
-	char message[20];
-};
-
+#define RPC_SPAWN    0x001	
 
 
 
@@ -97,23 +57,37 @@ public:
 // -------------------- Message structs -------------------- //
 // --------------------------------------------------------- //
 
-/* TODO: Modify this to hold only the data required for a certain RPC */
+/* -- MSG_REP, Server Creates --
+* Stores the net relevant data for each actor (ActorNetData) that needs to be replicated
+*/
+struct GameState
+{
+private:
+	char messageType = MSG_REP;
+public:
+	/* Contiguous actor data. Read using the size of ActorNetData */
+	char data[MAX_ACTORS * sizeof(ActorNetData)];
+};
+
+/* -- MSG_REP, Client Creates --
+* Stores a frames input with that frames input request ID.
+* The server uses the ID to know in which sequence the requests have been made, and process them
+*/
+struct ClientInput 
+{
+private:
+	char messageType = MSG_REP;
+public:
+	/* Stores the input state for each possible input action, for a single client frame */
+	char inputString;
+	/* The request being made by the client */
+	unsigned int inputRequestID;
+};
 
 
-// NOTE USED
-// MSG_SPAWN
-//struct NetworkSpawnData
-//{
-//private:
-//	char messageType = 's';
-//public:
-//	unsigned int simulationStep; // renamed from stateSequenceID
-//	unsigned int dummyActorID; // ID used to link dummy with authoritative client actor
-//	unsigned int networkedActorID;
-//};
 
 
-// MSG_STRTGM
+
 struct StartGameData
 {
 private:
@@ -135,8 +109,32 @@ public:
 };
 
 
-// MSG_ID (To Client)
 
 
 
 
+
+// ----------------------------------------------------------------------- //
+// -------------------- Remote Procedure Call structs -------------------- //
+// ----------------------------------------------------------------------- //
+/*
+* The Header for all RPC messages
+*/
+struct RemoteProcedureCall
+{
+private:
+	char messageType = MSG_RPC;
+
+public:
+	/* Which RPC will be called*/
+	char method;
+
+	/* Simulation Step the RPC is being called during */
+	unsigned int simulationStep;
+
+	/* Seconds after the last fixed frequency update completed */
+	float secondsSinceLastUpdate;
+
+	/* Dynamic to allow different sizes of RPC message bodies to be used without wasting space */
+	char message[20];
+};

@@ -128,18 +128,30 @@ server receives inputs and stores them for that FFU. When the FFU occurs, the st
 Server must personalize each reply message per client with that client's appropriately most recently processed input.
 
 
+
+0000 0000
+	    1 : up
+       1  : down
+      1   : left
+     1    : right
+   1      : shoot
 client_update
 {
- unsigned int update_id;
- char input_bit_string;
+	unsigned int update_id;
+	char input_bit_string;
 }
 
 
 // Wrapper for gameState. Sent to each client
 server_output_state
 {
- unsigned int most_recent_acknowledged_update_id;
- gameState state;
+	unsigned int most_recent_acknowledged_update_id;
+	gameState state;
+}
+
+gameState
+{
+	network relevant properties for each actor
 }
 
 
@@ -224,6 +236,12 @@ server-request storage
 	- request sequence ID
 
 client stores most recently acked state
+
+
+
+
+
+
 
 
 

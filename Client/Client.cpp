@@ -302,9 +302,10 @@ void playingGameLoop()
 		elapsedTimeSinceUpdate += deltaTime;
 
 		processInput(window);
-		moveActors(deltaTime);
+		// moveActors(deltaTime); TEST
 
 		Render();
+
 
 		// ---- Fixed Frequency Update ---- //
 		if (elapsedTimeSinceUpdate >= updatePeriod)

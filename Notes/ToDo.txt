@@ -5,10 +5,6 @@ program.
 
 
 
-
-
-
-
 ----------  KEY ---------- 
 [ ] : Task. Will definitely be included in the project
 
@@ -19,28 +15,24 @@ program.
 
 
 
+Starting Point: Client receives a state and simply sets it's state to that state.
 
-[X] 1. Program state management				
-	- Moving between game states effectively
-	- clearly defined states
 
-[X] 2. Retrieving the timestep from the server
 
+[ ] Rework movement so loop of main on client is processed as a desired input bit string
+	[x] Create the appropriate input struct for the client to update the server with
+	[x] create bitmasks for different user inputs
+	
+[ ] Store these bitstrings on the server and batch process them. Reply with correct state.
+    This reply should include ACK for most recent handled request.
+    At this point, the client can simply apply the most recently processed state to it's current position
 
-[X] 3. Remote Procedure calls
-	- Double check that old passed calls are being removed properly
-	- Consider making approach to storing and removing calls more efficient
+[ ] Client should store its requests and ack them using incoming updates
 
 
-[X] 4. move Spawning to be an RPC
-	- Should client also receive spawn RPC? (Probably not. What we have works well enough rn)
 
-[ ] 5. Proper proxy handling
-	- Is the proxy positioned correctly? I recall the proxy being in the wrong location once the client was being handled
-	- Destroying the proxy when the client receives proper replication
 
 
-[ ] 6. State comparison & Reconciliation
 
 
 
@@ -51,95 +43,3 @@ program.
 
 
 
-
-
-
-
-
-[ ] Modify program to make proper use of Client struct, rather than associating information together using a map
-
-
-
-
-
-
-
-
-
-
-
-[ ] BUG: If somehow the reply to spawn messages reaches our client AFTER the spawned actor is replicated, we'll have problems
-
-
-
-[ ] BUG: Spawning actors from the server is failing to remove the proxies once their server copy has begun to be replicated
-
-
-[ ] Server proxy spawns aren't being done on the correct frame. They're being done instantly
-
-
-[ ] Find a better solution for controlling the state of the program. Problematic bug when looping to get servers current state sequence ID
-
-[ ] Server is still sending snapshots as a list of actors instead of a list of actorNetData's. This should be changed
-
-[ ] Properly compare for state's being received from server and decide on reconciliation method
-
-[ ] Spawned client side proxies need to not use actor ID's that conflict with those used by proper actors within the system.
-
-[1/2] Client stores it's own snapshots and compares to the ones received from server when they're received
-	[ ] Client Creates and stores GameStates
-	[ ] Client properly unpacks Gamestates from server
-	[ ] Greater Consideration must be placed into what constitutes a bad comparison between states
-
-[ ] Client Reconciliation
-
-[ ] Handling Actions that will often occur several times between fixed updates
-
-[ ] Handle case where stateSequenceID's could exceed maximum value. ie. we need to wrap
-
-
-
-
-NOTE: This feature is useful for rollback, but not the most important feature to be implementing
-[x] Implement a circular buffer on the client, for Client state, and received server state
-	[ ] Modify client's reading of packets and server's writing of packets to include the state sequence number
-	[ ] Make sure stateSequenceId's cannot exceed maximum number of states. implement circular system
-	[ ] Using the rate of state creation, decide on a value for MAX_STATES
-
-
-
-
-
-
-
-
-
-
--------------------------------------
----------- Spawning Actors ----------
-------------------------------------- 
-
-[x] Pre-load and cache all the meshes needed for creating actors so this isn't done when actors are spawned
-	[x] Implement a static method in Actor that caches the meshes at runtime
-	[ ] fix bug that is preventing the loading from being done as the first step in the client's main function	
-
-[ ] Handle responsive client side predicted spawning of actors
-	[ ] Spawning ghost actor on client side & sending spawn request. Frame data must be included in request so server knows which frame is 
-	    the spawn frame.
-	[ ] Ghost actor must able to be associated with network id if server proxy is successfully spawned
-
-
-
-
-
-----------------------------------------
----------- Low Priority Tasks ----------
-----------------------------------------
-
-[ ] Move the fixed update period to the dll.
-
-
-NOTE: The game is for LAN. At the moment, simply sending each state seems to work. We'll fry other fish first
-[ ] Design Reconciliation approach for locally generated client states differ from those predicted by the server
-
-( ) Do we need to remove the buffer consuming loop? Fixed-Updates might solve this issue
