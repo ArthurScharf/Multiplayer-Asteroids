@@ -3,6 +3,7 @@
 #include <iostream>
 #include <map>
 #include <set>
+#include <queue>
 #include <tchar.h> // _T
 #include <thread>
 #include <WinSock2.h>
@@ -36,9 +37,17 @@ const unsigned int NUM_PACKETS_PER_CYCLE = 10;
 
 
 
+// ------------------------------------------- // 
+// ----- Client Struct & Associated Data ----- //
+// ------------------------------------------- // 
 
-// TODO: This should be in definitions. Client.cpp should use this. Should be renamed to clientNetworkData
-/* Exists so client IP's can be used as key's in a client to actor map. */
+
+
+
+/* TODO: Naming is confusing given Client.cpp already exists
+* 
+* Encapsulates data related to a specific client connection.
+*/
 struct Client
 {
 	in_addr _in_addr;
@@ -61,6 +70,15 @@ struct Client
 	*       While this is bad to ignore, we're just going to assume it's never reached
 	*/
 	unsigned int nextActorNetworkID = 0;
+
+
+	/*
+	* Queue for storing input requests that have yet to be processed for this client.
+	* Server processes the entire queue while processing FFU.
+	* 
+	* TODO: Potentially process the queue as it's received to avoid slowdown on FFU.
+	*/
+	std::queue<ClientInputData> unprocessedInputRequests;
 
 
 	/* Actor controlled by this client */
@@ -100,6 +118,11 @@ struct Client
 std::vector<Client> clients;
 std::vector<int> unclaimedClientNetworkIDs = { 0b00000001, 0b00000010, 0b00000011, 0b00000100 };
 unsigned int numReadyClients = 0;
+
+
+
+
+
 
 
 
@@ -275,6 +298,7 @@ void waitingForConnectionsLoop()
 }
 
 
+
 void playingGameLoop()
 {
 	std::chrono::steady_clock::time_point start = std::chrono::high_resolution_clock::now();
@@ -290,6 +314,7 @@ void playingGameLoop()
 		start = std::chrono::high_resolution_clock::now();
 		deltaTime = (start - end).count() / 1000000000.f;	// nanoseconds to seconds
 		secondsSinceLastUpdate += deltaTime;
+
 
 
 		// ---- Receiving Messages ---- //
@@ -328,7 +353,7 @@ void playingGameLoop()
 
 		// -- Updating Actors -- //
 		moveActors(deltaTime);
-		// checkForCollisions(); // Potentially pushes actors onto `actorsDestroyedThisUpdate`
+		// checkForCollisions(); // TODO: Potentially pushes actors onto `actorsDestroyedThisUpdate`
 
 
 		// -- Fixed Frequency Update -- //
@@ -535,6 +560,7 @@ void readRecvBuffer()
 
 void handleMessage(char* buffer, unsigned int bufferLen)
 {
+	// TODO: That we need to create another client struct to find the correct one is a terrible design. This should be fixed
 	Client client;
 	client._in_addr = clientAddr.sin_addr;
 	switch (recvBuffer[0]) // Instruction Received
@@ -618,7 +644,7 @@ void handleMessage(char* buffer, unsigned int bufferLen)
 		sock.sendData(sendBuffer, 1 + sizeof(unsigned int), clientAddr);
 		break;
 	}
-	case MSG_REP: // Client sending actor movement update
+	case MSG_REP: // Client has sent a input request for a given frame
 	{
 		// std::cout << "handleMessage / MSG_REP" << std::endl;
 		// Receives client inputs and uses them to update the state of that client's playerActor
@@ -627,14 +653,21 @@ void handleMessage(char* buffer, unsigned int bufferLen)
 			std::cout << "MSG_REP : received replication of input from unknown client. Ignoring";
 			break;
 		}
+		// TODO: just use the client 5head
+
 		auto clientItr = std::find(clients.begin(), clients.end(), client); // Silly need to switch to an iterator since the client we created earlier isn't the same as the one that is stored
 		if (!clientItr->controlledActor)
-		{		// The client attempting to replicate has no actor to move
+		{	// The client attempting to replicate has no actor to move
 			break;
 		}
-		ActorNetData netData;
-		memcpy(&netData, buffer + 1, sizeof(netData));
-		clientItr->controlledActor->setMoveDirection(netData.moveDirection);
+
+		// -- Processing Input -- //
+		ClientInputData data;
+		memcpy(&data, buffer + 1, sizeof(ClientInputData));
+		/* Changing the delta time to the value calculated by the server */
+		data.deltaTime = 0.f; // TODO: Calculate delta time for input request and store in respective client's struct
+		clientItr->unprocessedInputRequests.push(data);
+
 		break;
 	}
 	case MSG_RPC:

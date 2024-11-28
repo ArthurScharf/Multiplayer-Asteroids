@@ -63,6 +63,15 @@ const unsigned int NUM_PACKETS_PER_CYCLE = 10; // 10
 int clientNetworkID;
 
 
+// -- Input Request -- //
+unsigned int nextInputRequestID = 0; // NOTE: unsigned integers wrap around when incremented past their max. Ideal for IDs
+/* Key:   The request sequence id
+   Value: The input bit string 
+
+   Stored this way so the input requests that are temporally before the most recently ACKed request
+   can be easily found and removed
+*/
+std::map<unsigned int, char> storedInputRequests;
 
 
 // ----- Actors ----- //
@@ -116,7 +125,9 @@ bool bRunMainLoop = true;
 
 /* Stores the states created by the client at each fixed update.
  * Used with incoming states from the server to compare for discrepencies */
-CircularBuffer stateBuffer;
+CircularBuffer stateBuffer; // TODO: The class needs reworking
+
+
 
 
 
@@ -124,9 +135,9 @@ CircularBuffer stateBuffer;
 // -- Time -- //
 float deltaTime = 0.f;
 float lastFrame = 0.f;
+unsigned int stateSequenceID = 0;
 float updatePeriod = 1.f / 20.f; // Verbose to allow easy editing. Should be properly declared later 20.f
 float elapsedTimeSinceUpdate = 0.f; // Seconds
-unsigned int stateSequenceID = 0;
 
 
 // -- Testing -- //
@@ -305,37 +316,60 @@ void playingGameLoop()
 		lastFrame = currentFrame;
 		elapsedTimeSinceUpdate += deltaTime;
 
+		// -- Process, Apply, & Store Input for This Frame-- //
 		inputThisFrame = processInput(window);
+		// moveActors(deltaTime); // DONT DELETE
+		storedInputRequests.emplace(std::pair<unsigned int, char>(nextInputRequestID, inputThisFrame));
+		
+		// ~~ Testing ~~ //
+		std::cout << "PlayerGameLoop -- num un-acknowledged input requests == " << storedInputRequests.size() << std::endl;
+		// ~~
 
-		std::cout << std::bitset<8>(inputThisFrame) << std::endl;
-		// moveActors(deltaTime); TEST
+		// -- Sending Input Data -- //
+		ClientInputData inputData;
+		inputData.inputRequestID = nextInputRequestID++; // Reminder that the increment will wrap this around
+		inputData.inputString = inputThisFrame;
+		inputData.deltaTime = deltaTime;
+		memcpy(sendBuffer, &inputData, sizeof(ClientInputData));
+		sock.sendData(sendBuffer, sizeof(ClientInputData), serverAddr);
+		
 
+		// -- Rendering -- //
 		Render();
 
-
+		/*
+		* Clients should send their input as quickly as possible.
+		* As such, doing an FFU only every so often isn't correct.
+		* It's the responsibility of the server to batch process each clients inputs
+		*/
 		// ---- Fixed Frequency Update ---- //
 		if (elapsedTimeSinceUpdate >= updatePeriod)
 		{
+			// ~~ TESTING: Pretending the server is ACKing input requests
 			elapsedTimeSinceUpdate -= updatePeriod;
-			stateSequenceID++;
+			storedInputRequests.clear();
+			// ~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~ //
 
-			// -- Creating New State -- //
-			std::vector<Actor*> actors;
-			for (auto iter = actorMap.begin(); iter != actorMap.end(); iter++)
-			{
-				actors.push_back(iter->second);
-			}
-			GameState* gameState = new GameState(stateSequenceID, actors);
-			stateBuffer.append(gameState);
 
-			if (!playerActor) continue; // BUG: Remove this to see bug
+		//	stateSequenceID++;
 
-			char sendBuffer[1 + sizeof(ActorNetData)]{ 0 };
-			sendBuffer[0] = MSG_REP;
+		//	// -- Creating New State -- //
+		//	std::vector<Actor*> actors;
+		//	for (auto iter = actorMap.begin(); iter != actorMap.end(); iter++)
+		//	{
+		//		actors.push_back(iter->second);
+		//	}
+		//	GameState* gameState = new GameState(stateSequenceID, actors);
+		//	stateBuffer.append(gameState);
 
-			ActorNetData data = playerActor->toNetData();
-			memcpy(sendBuffer + 1, &data, sizeof(ActorNetData));
-			sock.sendData(sendBuffer, 1 + sizeof(ActorNetData), serverAddr);
+		//	if (!playerActor) continue; // BUG: Remove this to see bug
+
+		//	char sendBuffer[1 + sizeof(ActorNetData)]{ 0 };
+		//	sendBuffer[0] = MSG_REP;
+
+		//	ActorNetData data = playerActor->toNetData();
+		//	memcpy(sendBuffer + 1, &data, sizeof(ActorNetData));
+		//	sock.sendData(sendBuffer, 1 + sizeof(ActorNetData), serverAddr);
 
 		}//~ Fixed Update
 

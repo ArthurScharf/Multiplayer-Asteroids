@@ -27,6 +27,8 @@
 */
 #define CLIENT_NETWORK_ID_MASK !((1 << 24) - 1)
 
+
+
 /* The input masks used to read the input bit-string sent by the client each frame, and read by the server */
 #define INPUT_UP    0b00000001
 #define INPUT_DOWN  0b00000010
@@ -74,7 +76,7 @@
 * Stores a frames input with that frames input request ID.
 * The server uses the ID to know in which sequence the requests have been made, and process them
 */
-struct ClientInput 
+struct ClientInputData
 {
 private:
 	char messageType = MSG_REP;
@@ -83,6 +85,11 @@ public:
 	char inputString;
 	/* The request being made by the client */
 	unsigned int inputRequestID;
+	/* Delta time at the time of creation. Server calculates based on time the request is received, 
+	*  and client uses local delta time.
+	*  Maintained so application of input is properly scaled
+	*/
+	float deltaTime;
 };
 
 
