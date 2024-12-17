@@ -245,4 +245,36 @@ client stores most recently acked state
 
 
 
- 
+
+
+
+PROBLEM: I need to detect for collision each time I update an actors position. Ideally, I could process each client-actor's position
+once each before checking for collision. Because I am receiving updates from each actor at differing rates (each client machine
+will have different processing speeds), each update will have it's own delta time. This is the same as saying they are occuring at
+different times. Thus, I cannot process all clients simultaneously.
+
+Thus, I must store all requests in a queue. At FFU, the queue is processed, and each client's `most recently acked request ID` will
+be updated as the queue is processed. After each position update, the server must make a collision check.
+
+KEY POINT: All entities should be placed in a hashgrid at beginning of FFU. After each client-actor's position update, 
+a collision check must occur.
+
+SOLUTION: Because client-actors cannot collide with one another, it's fine for now that we would simply process their 
+          inputs on a client, by client, basis. 
+		  I'm still going to implement a single large queue, since this will allow for implementing
+		  player collision if necassary 
+
+
+
+PROBLEM: When do I update the position of the server-owned actors if I'm going to be batch processing client updates?
+
+SOFT-SOLUTION: Process server-actor changes at the beginning of the FFU before we handle batched client inputs.
+               This will introduce less accuracy in player collision, since each asteroid's frame will be further apart 
+			   temporaly than player-actor frames.
+			   So long as FFUs are done frequently enough, this may not be a serious issue
+			   
+			   
+			   
+
+			  
+			  

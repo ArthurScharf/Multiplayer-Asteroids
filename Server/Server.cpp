@@ -72,13 +72,19 @@ struct Client
 	unsigned int nextActorNetworkID = 0;
 
 
-	/*
+	/* DEPRECATED 
 	* Queue for storing input requests that have yet to be processed for this client.
 	* Server processes the entire queue while processing FFU.
+	* 
+	* Queue is FIFO. We want to process in the sequence they're created.
 	* 
 	* TODO: Potentially process the queue as it's received to avoid slowdown on FFU.
 	*/
 	std::queue<ClientInputData> unprocessedInputRequests;
+	
+
+	/* Seconds since last update was received from this client XOR seconds since last FFU if no request since then */
+	float secondsSinceLastRequest = 0;
 
 
 	/* Actor controlled by this client */
@@ -115,10 +121,34 @@ struct Client
 };
 
 #define MAX_CLIENTS 4
+
+/* 
+* 
+* -- NOTE -- 
+* I think these should have been stored as pointers. I didn't see far enough into the future to predict I'd want this, and 
+* now changing this makes me nervous. I've left it as is, even though it introduces some obvious problems seen elsewhere in the program
+*/
 std::vector<Client> clients;
 std::vector<int> unclaimedClientNetworkIDs = { 0b00000001, 0b00000010, 0b00000011, 0b00000100 };
 unsigned int numReadyClients = 0;
+/* Stores the batch of all input request from clients that are to be processed 
+* during the server's next FFU
+*/
 
+
+/* Order matters here since we memcpy ClientInputData we receive using size of ClientInputData. We set the ptr manually
+*
+*  I could store ClientInputData with their sending client as a tuple, or I could do this.
+*  I chose this because it is more readable
+*/
+struct ClientInputData_Batched
+{
+public:
+	ClientInputData clientInputData;
+	Client* clientPtr;
+};
+
+std::queue<ClientInputData_Batched> batchedClientInputRequests;
 
 
 
@@ -306,9 +336,6 @@ void playingGameLoop()
 
 	while (currentState == SS_PlayingGame)
 	{
-		// printf("%d / %d\n", actorsDestroyedThisUpdate.size(), actors.size());
-
-
 		// ---- Time Management ---- //	
 		end = start;
 		start = std::chrono::high_resolution_clock::now();
@@ -316,11 +343,9 @@ void playingGameLoop()
 		secondsSinceLastUpdate += deltaTime;
 
 
-
 		// ---- Receiving Messages ---- //
 		readRecvBuffer(); // Reads NUM_PACKETS_PER_CYCLE worth of messages
 		
-
 
 		// ---- Handling RPCs ---- //
 		if (remoteProcedureCalls.count(stateSequenceID) != 0) // Counts number of elements with specified key
@@ -381,6 +406,14 @@ void playingGameLoop()
 			//};
 			
 
+			// -- Processing & Consuming Client Requests -- //
+			//for (int i = 0; i < clients.size(); i++)
+			//{
+			//	processClientInput(clients[i]);
+			//}
+
+
+
 			// -- Sending Snapshot to Clients -- //
 			if (clients.size() <= 0) return;
 
@@ -423,6 +456,10 @@ void playingGameLoop()
 
 	};//~ Main Loop
 }
+
+
+
+
 
 
 // TODO: BUG: since I'm modifying the array while iterating (doing so with indices), this will create issues
@@ -653,20 +690,24 @@ void handleMessage(char* buffer, unsigned int bufferLen)
 			std::cout << "MSG_REP : received replication of input from unknown client. Ignoring";
 			break;
 		}
-		// TODO: just use the client 5head
-
+		
+		/* `client` is a misname. clintItr is the actual client struct */
 		auto clientItr = std::find(clients.begin(), clients.end(), client); // Silly need to switch to an iterator since the client we created earlier isn't the same as the one that is stored
 		if (!clientItr->controlledActor)
 		{	// The client attempting to replicate has no actor to move
 			break;
 		}
 
-		// -- Processing Input -- //
-		ClientInputData data;
-		memcpy(&data, buffer + 1, sizeof(ClientInputData));
-		/* Changing the delta time to the value calculated by the server */
-		data.deltaTime = 0.f; // TODO: Calculate delta time for input request and store in respective client's struct
-		clientItr->unprocessedInputRequests.push(data);
+		// -- Processing Input -- 
+		ClientInputData_Batched data;
+		memcpy(&data, buffer + 1, sizeof(ClientInputData)); // Not the same size on purpose. Struct is ordered such that this data will be set first. We set the client data manually
+		data.clientPtr = &(*clientItr); // This syntax existing means I should probably have used pointers
+
+		// Updates sending client's secondsSinceLastRequest, and sets this requests server-side deltaTime;
+		data.clientInputData.deltaTime = secondsSinceLastUpdate - clientItr->secondsSinceLastRequest;
+		clientItr->secondsSinceLastRequest = secondsSinceLastUpdate;
+
+		batchedClientInputRequests.push(data); // Should copy since pass-by-value
 
 		break;
 	}
