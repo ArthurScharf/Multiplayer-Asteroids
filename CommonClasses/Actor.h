@@ -49,6 +49,10 @@ for size checks
 */
 struct ActorNetData
 {
+	/*
+	* Combined network ID. Stores (big endian) both the network ID of the client (last 4 bits),
+	* and the ID of the actor.
+	*/
 	unsigned int id; // 0 is never assigned. Reserved as a sort of `null` state for id.
 	EActorBlueprintID blueprintID; // Used to identify which actor blueprint this is
 	Vector3D Position;
@@ -79,16 +83,15 @@ struct ActorNetData
 class Actor
 {
 // -- Static Members -- //
-private:
+public:
 	/*
 	* Mask for seperating the id of an actor from the network ownership of that actor.
 	* last two bits in an unsigned long are reserved to identify the owning client
-	* 
+	*
 	* bit starts at pos 0. Shift 28 to put in pos 29. -1 gives max number in 28 bits
 	*/
-	static const unsigned int idMask = (1 << 28) - 1; 
-
-	
+	static const unsigned int idMask = (1 << 28) - 1;
+private:	
 	/* cached models for constructing actor blueprints */
 	static Model* modelCache[256]; // TODO: 256 is too large. Should be shrunk massively once we know how many we're actually using
 	static unsigned int numCachedModels;
@@ -143,7 +146,7 @@ public:
 
 	// DEPRECATED. May want to refactor to emplace a ActorNetData into the passed buffer
 	static unsigned int serialize(char* buffer, Actor* actor);
-	/*
+	/* DEPRECATED
 	* The signature is different than serialize because we want to instantiate an actor internally.
 	* If we allowed the return actor to be a parameter, we allow a user to pass any kind of actor pointer,
 	* which run's it's own selection of issues

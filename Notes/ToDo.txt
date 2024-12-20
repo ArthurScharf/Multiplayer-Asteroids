@@ -45,16 +45,17 @@ Starting Point: Client receives a state and simply sets it's state to that state
 
 	[x] Calculate the delta time for received input requests (on the server per a client basis)
 	
-	[ ] Implement client update queue on server. Server stores all clients updates in their order received
-		[ ] Client `secondsSinceLastRequest` must be set to 0 at the end of FFU
+	[x] Implement client update queue on server. Server stores all clients updates in their order received
+		[x] Client `secondsSinceLastRequest` must be set to 0 at the end of FFU
 		[x] server must implement a queue that stores all client requests that will be batched
 			> Implementation includes wrapping of incoming request packets to associate with correct client
 
-	[x] Solve problem: When, during the FFU, does the server update the position of the asteroids (or other server owned actors?)
-		> Update asteroid position at beginning of FFU. For time contraint purposes, we won't do substepping.
+	[ ] Update asteroid position at beginning of FFU. For time contraint purposes, we won't do substepping.
 	
 	[ ] Server must use a batch of inputs to update the server's state
 		[ ] Server must ack clients based on the most recently processed state
+	
+	[ ] Client must store input requests it's making, along with state of world at that point.
 	
 	[ ] Upon receiving ACK, client must store most recently acked state, set it's current state to that state, then
 	    reapply all non-acked states to the current state.

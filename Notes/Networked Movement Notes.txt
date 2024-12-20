@@ -207,7 +207,7 @@ client receives update
 {
   stores the most recently validated state (the one received by the FFU)
   Discards all acknowledged requests
-  reprocesses all requests, starting from the most recently acknowledged state (this will also have the issue that client delta time isn't known. Fudgable?).
+  reprocesses all remaining requests, starting from the most recently acknowledged state (this will also have the issue that client delta time isn't known. Fudgable?).
   This reprocessing is done in a single frame. This way, the player doesn't experience that reprocessing
 }
 
@@ -275,6 +275,42 @@ SOFT-SOLUTION: Process server-actor changes at the beginning of the FFU before w
 			   
 			   
 			   
+			   
+			   
+----- Client Handling of Acknowledged Requests -----
+> Client receives ack
+> stored position may still be incorrect. Ack must come back with state of world so client can correct.
+> Upon ack, client discards all acknowledged requests and stores the state that came with the most recently acked request.
+> Client reapplies all inputs from the state that was saved, using the stored delta times it created when it initially 
+  sent the requests.
+  
+  
+  
+  
+  
+  
+  
+--------------------------------------------------------------------------------------------------------------------------------------  
+---- The design so far ----
 
-			  
-			  
+Clients are temporally in the future
+	> I understand that each client must be in the future, since each state change request made by a client must be handled 
+	  by a server which will always receive these requests some time after they're sent. 
+	 
+Server Fixed frequency updates
+	> It would be too much for the network and the server for said server to reply with state updates for the game each time a request
+	  is received from a client. The server will only update the world state and notify the clients at some fixed interval.
+	 
+Client Prediction
+	> Clients send input request as they generate them. Because waiting for the server to respond to the client will take too long, 
+	  making the game feel unresponsive, clients must be able to make predictions to what the world should look like
+	
+Client Reconciliation
+	> Every FFU, the server returns the state of the game, and the most recently ACK'd request that client made.
+	  When this happens, the client stores the state it recieved (which is the most recently valid state), sets it's world
+	  to that state, and reapplies all inputs that haven't been acknowledged yet. This is done in a single frame
+	  
+
+
+QUESTION: Since the entire system defers to some recently received valid state, can't I simply ignore the need for the client to be 
+          ahead of the server? All input requests received are relative to some recently validated state. The server can just assume that all inputs are being done relative to this state

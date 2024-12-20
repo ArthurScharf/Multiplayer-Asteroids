@@ -26,8 +26,8 @@
 
 
 UDPSocket sock;
-// I doubt any other kind of message will exceed the size of this type of message
-char sendBuffer[1 + sizeof(unsigned int) + (MAX_ACTORS * sizeof(ActorNetData))]{};
+/* Sized this way because we've designed the system with GameState to be the biggest entity we'd ever send */
+char sendBuffer[sizeof(ServerGameState)]{};
 char* recvBuffer{};
 // Stores the internet address for the currently being processed client
 sockaddr_in clientAddr;
@@ -72,20 +72,10 @@ struct Client
 	unsigned int nextActorNetworkID = 0;
 
 
-	/* DEPRECATED 
-	* Queue for storing input requests that have yet to be processed for this client.
-	* Server processes the entire queue while processing FFU.
-	* 
-	* Queue is FIFO. We want to process in the sequence they're created.
-	* 
-	* TODO: Potentially process the queue as it's received to avoid slowdown on FFU.
-	*/
-	std::queue<ClientInputData> unprocessedInputRequests;
-	
-
 	/* Seconds since last update was received from this client XOR seconds since last FFU if no request since then */
 	float secondsSinceLastRequest = 0;
-
+	/* Stores the ID for the last request that was acknowledged for this connection. Used when sending game state to clients during FFU */
+	unsigned int lastAcknowledgedRequestID;
 
 	/* Actor controlled by this client */
 	Actor* controlledActor = nullptr;
@@ -136,15 +126,15 @@ unsigned int numReadyClients = 0;
 */
 
 
-/* Order matters here since we memcpy ClientInputData we receive using size of ClientInputData. We set the ptr manually
+/* Order matters here since we memcpy ClientInputRequest we receive using size of ClientInputRequest. We set the ptr manually
 *
-*  I could store ClientInputData with their sending client as a tuple, or I could do this.
+*  I could store ClientInputRequest with their sending client as a tuple, or I could do this.
 *  I chose this because it is more readable
 */
 struct ClientInputData_Batched
 {
 public:
-	ClientInputData clientInputData;
+	ClientInputRequest clientInputData;
 	Client* clientPtr;
 };
 
@@ -212,6 +202,8 @@ ServerState currentState = SS_WaitingForConnections;
 void waitingForConnectionsLoop();
 
 void playingGameLoop();
+
+void handleInputRequest(ClientInputData_Batched& inputData);
 
 void moveActors(float deltaTime);
 
@@ -376,12 +368,11 @@ void playingGameLoop()
 		}//~ handling RPCs
 
 
-		// -- Updating Actors -- //
-		moveActors(deltaTime);
-		// checkForCollisions(); // TODO: Potentially pushes actors onto `actorsDestroyedThisUpdate`
 
 
-		// -- Fixed Frequency Update -- //
+		//----------------------------------//
+		//----- Fixed Frequency Update -----//
+		//----------------------------------//
 		if (secondsSinceLastUpdate >= updatePeriod) // ~20 times a second
 		{
 			// std::cout << "FFU / numActors: " << actors.size() << std::endl;
@@ -390,69 +381,81 @@ void playingGameLoop()
 			secondsSinceLastUpdate -= updatePeriod;
 			stateSequenceID++;
 
-			// ---- Spawning Asteroids ---- //
-			
-			//if ((stateSequenceID % 40) == 0)
-			//{	// Spawn Asteroid
-			//	// std::cout << "TEST" << std::endl;
-			//	Actor* asteroid = new Actor(
-			//		10 + nextActorNetworkID_Server++,
-			//		Vector3D(0.f, 50.f, 25.f),
-			//		Vector3D(0.f, -1.f, 0.f),
-			//		ABI_Asteroid,
-			//		false
-			//	);
-			//	actors.push_back(asteroid);
-			//};
-			
-
-			// -- Processing & Consuming Client Requests -- //
-			//for (int i = 0; i < clients.size(); i++)
-			//{
-			//	processClientInput(clients[i]);
-			//}
-
-
-
 			// -- Sending Snapshot to Clients -- //
 			if (clients.size() <= 0) return;
 
-			// - Packing actor data - //
-			sendBuffer[0] = MSG_REP;
-			unsigned int offset = 1; // Number of bytes to reach memory to be filled
 
-			// printf("FFU %d -- Actor Size: %d\n", stateSequenceID, actors.size());
 
-			memcpy(sendBuffer + 1, &stateSequenceID, sizeof(unsigned int));
-			offset += sizeof(unsigned int);
 
-			for (unsigned int i = 0; i < actors.size(); i++) // Iterating Actors
+			/* TODO
+			* [ ] 1. Update position of asteroids
+			* [x] 2. process `unprocessedClientRequests` queue.
+			*	[ ] 2.1 Process collisions between asteroids and player actors
+			* [X] 4. Send special struct containing both the most recently acknowledged state, and the state of the game at that point
+ 			*/
+
+			//------------------------------------------//
+			//----- Updating Position of Asteroids -----//
+			//------------------------------------------//
+			// TODO
+
+
+
+
+
+			//-------------------------------------//
+			//----- Processing Input Requests -----//
+			//-------------------------------------//
+
+			while (batchedClientInputRequests.size() > 0)
 			{
-				ActorNetData data = actors[i]->toNetData();
-
-				memcpy(sendBuffer + 1 + sizeof(unsigned int) + (i * sizeof(ActorNetData)), &data, sizeof(ActorNetData));
-				offset += sizeof(ActorNetData);
+				handleInputRequest(batchedClientInputRequests.back());
+				batchedClientInputRequests.pop();
 			}
-			for (unsigned int i = 0; i < actorsDestroyedThisUpdate.size(); i++) // Iterating data from destroyed actors
+
+
+
+
+			//--------------------------------------------//
+			//----- SENDING STATE OF GAME TO CLIENTS -----//
+			//--------------------------------------------//
+			
+			//-- Initializing
+			ServerGameState state;
+			state.acknowledgedRequestID = 0;
+			state.numActors = actors.size() + actorsDestroyedThisUpdate.size(); // So the receiving client knows how many to read from the otherwise static array
+
+			//-- Packing all actors into GameState
+			for (int i = 0; i < actors.size(); i++)
 			{
-				memcpy(sendBuffer + offset, &actorsDestroyedThisUpdate[i], sizeof(ActorNetData));
-				offset += sizeof(ActorNetData);
+				state.actorNetData[i] = actors[i]->toNetData();
 			}
 
-			// - Sending Actor data - //
-			for (auto it = clients.begin(); it != clients.end(); ++it)
+			//-- Packing all actors destroyed this update into GameState
+			unsigned int offset = (actors.size() > 0) ? actors.size() : 0; // avoids -1 offset value if there are no actors that still exist
+			for (int i = 0; i < actorsDestroyedThisUpdate.size(); i++)
 			{
-				// offset is now the length of the buffer in bytes
-				clientAddr.sin_addr = it->_in_addr;
-				sock.sendData(sendBuffer, offset, clientAddr);
+				// NOTE: Since for actorsDestroyedThisUpdate.size() + actors.size() < MAX_ACTORS, the following indexing should always be safe
+				state.actorNetData[i + offset] = actorsDestroyedThisUpdate[i];
 			}
 
-			// -- Clearing Actors Destroyed from This Update -- //
+			//-- Sending GameState
+			for (auto clientItr = clients.begin(); clientItr != clients.end(); ++clientItr)
+			{
+				state.acknowledgedRequestID = clientItr->lastAcknowledgedRequestID;
+				memcpy(sendBuffer, &state, sizeof(ServerGameState));
+				clientAddr.sin_addr = clientItr->_in_addr;
+				sock.sendData(sendBuffer, sizeof(ServerGameState), clientAddr);
+				clientItr->secondsSinceLastRequest = 0.f; // Reset so next round of updates can have their delta times correctly calculated
+			}
+
+			//-- Clearing Actors Destroyed from This Update 
 			if (actorsDestroyedThisUpdate.size() > 0)
 			{
 				actorsDestroyedThisUpdate.clear();
 			}
 		}//~ Fixed Update
+
 
 	};//~ Main Loop
 }
@@ -460,9 +463,39 @@ void playingGameLoop()
 
 
 
+void handleInputRequest(ClientInputData_Batched& inputData)
+{
+	Client* clientPtr = inputData.clientPtr;
+
+	// std::cout << "handleInputRequest -- " << (unsigned int)inputData.clientPtr->clientNetworkID << std::endl;
+
+	if (clientPtr->controlledActor)
+	{
+		// std::cout << "handleInputRequest -- has controlled actor" << std::endl;
+		//-- Creating vector that will be used to change the position of the controlled actor
+		char inputByte = inputData.clientInputData.inputString;
+
+		Vector3D moveDirection(0.f);
+		if (inputByte & INPUT_UP)
+			moveDirection.y += 1.f;
+		if (inputByte & INPUT_DOWN)
+			moveDirection.y -= 1.f;
+		if (inputByte & INPUT_LEFT)
+			moveDirection.x -= 1.f;
+		if (inputByte & INPUT_RIGHT)
+			moveDirection.x += 1.f;
+		moveDirection.Normalize();
+
+		//-- Moving the actor in the calculated direction by it's move speed
+		clientPtr->controlledActor->addToPosition(moveDirection * clientPtr->controlledActor->getMoveSpeed() * inputData.clientInputData.deltaTime);
+	}
+
+	clientPtr->lastAcknowledgedRequestID = inputData.clientInputData.inputRequestID;
+}
 
 
-// TODO: BUG: since I'm modifying the array while iterating (doing so with indices), this will create issues
+
+
 void moveActors(float deltaTime)
 {
 	for (unsigned int i = 0; i < actors.size(); i++)
@@ -581,6 +614,11 @@ void checkForCollisions()
 }
 
 
+
+
+
+
+
 void readRecvBuffer()
 {
 	// ----  Receiving Data from Clients ----  //
@@ -690,6 +728,8 @@ void handleMessage(char* buffer, unsigned int bufferLen)
 			std::cout << "MSG_REP : received replication of input from unknown client. Ignoring";
 			break;
 		}
+
+		// std::cout << "handleMessage / MSG_REP -- " << (unsigned int)client.clientNetworkID << std::endl;
 		
 		/* `client` is a misname. clintItr is the actual client struct */
 		auto clientItr = std::find(clients.begin(), clients.end(), client); // Silly need to switch to an iterator since the client we created earlier isn't the same as the one that is stored
@@ -698,9 +738,9 @@ void handleMessage(char* buffer, unsigned int bufferLen)
 			break;
 		}
 
-		// -- Processing Input -- 
+		//-- Processing Input
 		ClientInputData_Batched data;
-		memcpy(&data, buffer + 1, sizeof(ClientInputData)); // Not the same size on purpose. Struct is ordered such that this data will be set first. We set the client data manually
+		memcpy(&data, buffer, sizeof(ClientInputRequest)); // Not the same size on purpose. Struct is ordered such that this data will be set first. We set the client data manually
 		data.clientPtr = &(*clientItr); // This syntax existing means I should probably have used pointers
 
 		// Updates sending client's secondsSinceLastRequest, and sets this requests server-side deltaTime;

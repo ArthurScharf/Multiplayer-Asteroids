@@ -10,6 +10,7 @@
 #include <thread>
 #include <map>
 #include <set>
+//#include <queue>
 #include <bitset> // For testing. Remove later Should use pre-processor commands with DEBUG to automate this
 
 #include "Camera.h"
@@ -65,13 +66,12 @@ int clientNetworkID;
 
 // -- Input Request -- //
 unsigned int nextInputRequestID = 0; // NOTE: unsigned integers wrap around when incremented past their max. Ideal for IDs
-/* Key:   The request sequence id
-   Value: The input bit string 
 
-   Stored this way so the input requests that are temporally before the most recently ACKed request
-   can be easily found and removed
-*/
-std::map<unsigned int, char> storedInputRequests;
+//std::queue<ClientInputRequest*> storedInputRequests;
+std::vector<ClientInputRequest*> storedInputRequests;
+
+ServerGameState lastServerGameState;
+
 
 
 // ----- Actors ----- //
@@ -165,6 +165,8 @@ void spawnProjectile();
 void destroyActor(unsigned int id);
 void moveActors(float deltaTime); // Moves the actors locally. Lower priority actor update than the fixed updates
 void replicateState(char* buffer, int bufferLen);
+void replicateState(ServerGameState& state);
+void clientReconciliation();
 void readRecvBuffer();
 char handleMessage(char* buffer, unsigned int bufferLen); // returns message that was handled
 void cleanup();
@@ -310,29 +312,35 @@ void playingGameLoop()
 
 	while (currentState == CS_PlayingGame)
 	{
-		// ---- Per-frame logic ---- //
+		//-------------------------//
+		//---- Per-frame logic ----//
+		//-------------------------//
+		if (storedInputRequests.size() > 5000)
+		{
+			printf("ERROR: stored input Requests exceeded limit. Terminating Program\n");
+			currentState = CS_Exit;
+			return;
+		}
+
 		float currentFrame = static_cast<float>(glfwGetTime());
 		deltaTime = currentFrame - lastFrame;
 		lastFrame = currentFrame;
 		elapsedTimeSinceUpdate += deltaTime;
 
-		// -- Process, Apply, & Store Input for This Frame-- //
+		//-- Process, Apply, & Store Input for This Frame
 		inputThisFrame = processInput(window);
-		// moveActors(deltaTime); // DONT DELETE
-		storedInputRequests.emplace(std::pair<unsigned int, char>(nextInputRequestID, inputThisFrame));
 		
-		// ~~ Testing ~~ //
-		std::cout << "PlayerGameLoop -- num un-acknowledged input requests == " << storedInputRequests.size() << std::endl;
-		// ~~
+		// -- Storing & Sending Input Data -- //
+		ClientInputRequest* inputData = new ClientInputRequest();
+		inputData->inputRequestID = nextInputRequestID++; // Reminder that the increment will wrap this around
+		inputData->inputString = inputThisFrame;
+		inputData->deltaTime = deltaTime;
+		storedInputRequests.push_back(inputData);
+		memcpy(sendBuffer, inputData, sizeof(ClientInputRequest));
+		sock.sendData(sendBuffer, sizeof(ClientInputRequest), serverAddr);
 
-		// -- Sending Input Data -- //
-		ClientInputData inputData;
-		inputData.inputRequestID = nextInputRequestID++; // Reminder that the increment will wrap this around
-		inputData.inputString = inputThisFrame;
-		inputData.deltaTime = deltaTime;
-		memcpy(sendBuffer, &inputData, sizeof(ClientInputData));
-		sock.sendData(sendBuffer, sizeof(ClientInputData), serverAddr);
-		
+		//-- Moving Actors
+		moveActors(deltaTime);
 
 		// -- Rendering -- //
 		Render();
@@ -342,12 +350,14 @@ void playingGameLoop()
 		* As such, doing an FFU only every so often isn't correct.
 		* It's the responsibility of the server to batch process each clients inputs
 		*/
-		// ---- Fixed Frequency Update ---- //
+		//--------------------------------//
+		//---- Fixed Frequency Update ----//
+		//--------------------------------//
 		if (elapsedTimeSinceUpdate >= updatePeriod)
 		{
 			// ~~ TESTING: Pretending the server is ACKing input requests
 			elapsedTimeSinceUpdate -= updatePeriod;
-			storedInputRequests.clear();
+			// storedInputRequests.clear();
 			// ~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~ //
 
 
@@ -371,7 +381,7 @@ void playingGameLoop()
 		//	memcpy(sendBuffer + 1, &data, sizeof(ActorNetData));
 		//	sock.sendData(sendBuffer, 1 + sizeof(ActorNetData), serverAddr);
 
-		}//~ Fixed Update
+		}//~ FFU
 
 		readRecvBuffer();
 		glfwPollEvents();
@@ -578,6 +588,12 @@ char processInput(GLFWwindow* window)
 		
 	}//~ playing game loop
 
+	//if (inputBitString != 0b0)
+	//{
+	//	//inputBitString = inputBitString;
+	//	std::cout << "processInput -- inputBitString as Hex : " << std::hex << (int)inputBitString << std::endl;
+	//}
+
 	return inputBitString;
 }
 
@@ -782,10 +798,16 @@ char handleMessage(char* buffer, unsigned int bufferLen)
 	case MSG_REP:	// Replicating
 	{
 		// std::cout << "handleMessage / MSG_REP" << std::endl; 
+		
 		/* Updates actor states to match server data.
-		*  Spawns actors that were sent to client, but don't yet exist
-		*/
-		replicateState(++buffer, --bufferLen); // TODO: Fixed update actors shouldn't be here. It should always be called and check for missing states when comparing
+		*  Spawns actors that were sent to client, but don't yet exist */
+		//replicateState(++buffer, --bufferLen); // TODO: Fixed update actors shouldn't be here. It should always be called and check for missing states when comparing
+		
+		ServerGameState state;
+		memcpy(&state, recvBuffer, sizeof(ServerGameState));
+
+		replicateState(state);
+
 		return MSG_REP;
 	}
 	case MSG_ID:	// Receiving Controlled Actor ID
@@ -821,6 +843,15 @@ char handleMessage(char* buffer, unsigned int bufferLen)
 }
 
 
+
+
+/* DEPRECATED. Use other version
+* Sets the state of each actor found in the buffer.
+* Local actors not found in the buffer were destroyed on the server. This is replicated here
+* Actors that don't exist locally must have been created and are thus, created here
+* 
+* Creates the state object used for Client Reconciliation.
+*/
 void replicateState(char* buffer, int bufferLen)
 {
 	// std::cout << "Client::replicateState\n";
@@ -909,6 +940,7 @@ void replicateState(char* buffer, int bufferLen)
 			printf("Client::replicateState -- Updating playerActor\n");
 			playerActor = actor;
 		}
+		// -- Incrementing Buffer Pointer -- 
 		buffer += sizeof(ActorNetData);
 	}//~ Handling single actor of those received
 
@@ -943,6 +975,97 @@ void replicateState(char* buffer, int bufferLen)
 	}
 	delete state;
 }
+
+
+
+
+
+void replicateState(ServerGameState& state)
+{
+	lastServerGameState = state;
+
+	if (storedInputRequests.size() == 0) return;
+
+	//-----------------------------------------------------//
+	//---- Popping older states than the one just ACKd ----//
+	//-----------------------------------------------------//
+	std::vector<ClientInputRequest*>::iterator reqItr = storedInputRequests.begin();
+	while (reqItr != storedInputRequests.end())
+	{
+		if ((*reqItr)->inputRequestID != state.acknowledgedRequestID)
+		{	
+			delete (*reqItr);
+			storedInputRequests.erase(reqItr);
+			break;
+		}
+
+		delete (*reqItr);
+		reqItr = storedInputRequests.erase(reqItr);
+	} 
+
+
+	//-------------------------------------------------------//
+	//---- Setting State of world to that of Acked State ----//
+	//-------------------------------------------------------//
+	std::cout << "replicateState(ServerGameState)" << std::endl;
+	ActorNetData* netData = state.actorNetData;
+	Actor* actor = nullptr;
+	for (int i = 0; i < state.numActors; i++)
+	{
+		//std::cout << "  " << netData->id << std::endl;
+
+		//-- Observerving type of data received
+		if (netData->bIsDestroyed) // Actor has been destroyed on the server 
+		{
+			destroyActor(netData->id);
+		}
+		else if (actorMap.find(netData->id) == actorMap.end()) // New Actor Encountered. Adding Actor to map
+		{
+			actor = new Actor(netData->id, netData->Position, netData->Rotation, netData->blueprintID, true);
+			actorMap[netData->id] = actor;
+		}
+		else //-- Actor found. Updating Actor data
+		{
+			std::cout << "  " << "update[ " << netData->id << " ]" << std::endl;
+			auto actorItr = actorMap.find(netData->id);
+			actorItr->second->setPosition(netData->Position);
+			actorItr->second->setRotation(netData->Rotation);
+			actorItr->second->setMoveDirection(netData->moveDirection);
+			actorItr->second->setMoveSpeed(netData->moveSpeed);
+		}
+
+		// -- Checking to see if we've encountered the player's controlled actor 
+		if (netData->id == controlledActorID && playerActor == nullptr)
+		{
+			printf("Client::replicateState -- Updating playerActor\n");
+			playerActor = actor;
+		}
+		netData++;
+	}//~ Setting State of World
+
+	//std::cout << std::endl;
+
+	//-----------------------------------------------//
+	//---- Reappling all non-ACKd stored changes ----//
+	//-----------------------------------------------//
+	if (!playerActor) return;
+	for (ClientInputRequest* req : storedInputRequests)
+	{
+		playerActor->addToPosition(playerActor->getMoveDirection() * playerActor->getMoveSpeed() * storedInputRequests.front()->deltaTime);
+	}
+}
+
+
+
+
+
+void clientReconciliation()
+{
+	// TODO
+}
+
+
+
 
 
 

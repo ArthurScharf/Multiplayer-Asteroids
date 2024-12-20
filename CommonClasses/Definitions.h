@@ -20,7 +20,7 @@
 // --------------------------------------------------- //
 
 #define MAX_PLAYERS 4
-#define MAX_ACTORS 64
+#define MAX_ACTORS 32
 
 /* Mask for actor id in a network ID.
 *  0000 == Server owned
@@ -59,24 +59,13 @@
 // -------------------- Message structs -------------------- //
 // --------------------------------------------------------- //
 
-// TODO: Implement and use. Server doesn't use this to pack itself. Inconsistent with rest of codebase
-/* -- MSG_REP, Server Creates --
-* Stores the net relevant data for each actor (ActorNetData) that needs to be replicated
-*/
-//struct GameState
-//{
-//private:
-//	char messageType = MSG_REP;
-//public:
-//	/* Contiguous actor data. Read using the size of ActorNetData */
-//	char data[MAX_ACTORS * sizeof(ActorNetData)];
-//};
 
 /* -- MSG_REP, Client Creates --
+* 
 * Stores a frames input with that frames input request ID.
 * The server uses the ID to know in which sequence the requests have been made, and process them
 */
-struct ClientInputData
+struct ClientInputRequest
 {
 private:
 	char messageType = MSG_REP;
@@ -94,6 +83,27 @@ public:
 
 
 
+/* -- MSG_REP, Server Creates -- 
+* 
+* Struct used to reply to each client at the end of a server FFU.
+* Stores each client's most recently ACKed request, as well as the server-calculated game state which corresponds to that request
+*/
+struct ServerGameState
+{
+private:
+	char messageType = MSG_REP;
+public:
+	/* ID for the most recently acknowledged request ID for one of the connected clients */
+	unsigned int acknowledgedRequestID;
+	/* So receiving client machine can understand how many actors are to be read. We've declared the actor array as static */
+	unsigned int numActors;
+	/* All net relevent data for each actor */
+	ActorNetData actorNetData[MAX_ACTORS];	
+};
+
+
+
+
 
 struct StartGameData
 {
@@ -103,6 +113,8 @@ private:
 public:
 	unsigned int simulationStep; // Simulation step the server was executing at time of message sending
 };
+
+
 
 
 // MSG_CONNECT (From Server)
