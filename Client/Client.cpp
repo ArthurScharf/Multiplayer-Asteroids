@@ -130,13 +130,11 @@ CircularBuffer stateBuffer; // TODO: The class needs reworking
 
 
 
-
-
 // -- Time -- //
 float deltaTime = 0.f;
 float lastFrame = 0.f;
 unsigned int stateSequenceID = 0;
-float updatePeriod = 1.f / 20.f; // Verbose to allow easy editing. Should be properly declared later 20.f
+float tickPeriod = 1.f / 30.f;
 float elapsedTimeSinceUpdate = 0.f; // Seconds
 
 
@@ -305,8 +303,8 @@ void waitingForGameToStartLoop()
 void playingGameLoop()
 {
 	/* glfwGetTime returns time since glfw was initialized. We want to only begin measure from the
-*  point at which the main loop began to run.
-*/
+	*  point at which the main loop began to run.
+	*/
 	lastFrame = static_cast<float>(glfwGetTime());
 	char inputThisFrame = 0b00000000;
 
@@ -327,61 +325,33 @@ void playingGameLoop()
 		lastFrame = currentFrame;
 		elapsedTimeSinceUpdate += deltaTime;
 
+
 		//-- Process, Apply, & Store Input for This Frame
 		inputThisFrame = processInput(window);
-		
-		// -- Storing & Sending Input Data -- //
-		ClientInputRequest* inputData = new ClientInputRequest();
-		inputData->inputRequestID = nextInputRequestID++; // Reminder that the increment will wrap this around
-		inputData->inputString = inputThisFrame;
-		inputData->deltaTime = deltaTime;
-		storedInputRequests.push_back(inputData);
-		memcpy(sendBuffer, inputData, sizeof(ClientInputRequest));
-		sock.sendData(sendBuffer, sizeof(ClientInputRequest), serverAddr);
+
+
+		//--------------------------------//
+		//---- Fixed Frequency Update ----//
+		//--------------------------------//
+		if (elapsedTimeSinceUpdate >= tickPeriod)
+		{	// Locking to 60 FPS
+			elapsedTimeSinceUpdate -= tickPeriod;
+
+			// -- Storing & Sending Input Data -- //
+			ClientInputRequest* inputData = new ClientInputRequest();
+			inputData->inputRequestID = nextInputRequestID++; // Reminder that the increment will wrap this around
+			inputData->inputString = inputThisFrame;
+			inputData->deltaTime = deltaTime;
+			storedInputRequests.push_back(inputData);
+			memcpy(sendBuffer, inputData, sizeof(ClientInputRequest));
+			sock.sendData(sendBuffer, sizeof(ClientInputRequest), serverAddr);
+		}//~ FFU
 
 		//-- Moving Actors
 		moveActors(deltaTime);
 
 		// -- Rendering -- //
 		Render();
-
-		/*
-		* Clients should send their input as quickly as possible.
-		* As such, doing an FFU only every so often isn't correct.
-		* It's the responsibility of the server to batch process each clients inputs
-		*/
-		//--------------------------------//
-		//---- Fixed Frequency Update ----//
-		//--------------------------------//
-		if (elapsedTimeSinceUpdate >= updatePeriod)
-		{
-			// ~~ TESTING: Pretending the server is ACKing input requests
-			elapsedTimeSinceUpdate -= updatePeriod;
-			// storedInputRequests.clear();
-			// ~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~ //
-
-
-		//	stateSequenceID++;
-
-		//	// -- Creating New State -- //
-		//	std::vector<Actor*> actors;
-		//	for (auto iter = actorMap.begin(); iter != actorMap.end(); iter++)
-		//	{
-		//		actors.push_back(iter->second);
-		//	}
-		//	GameState* gameState = new GameState(stateSequenceID, actors);
-		//	stateBuffer.append(gameState);
-
-		//	if (!playerActor) continue; // BUG: Remove this to see bug
-
-		//	char sendBuffer[1 + sizeof(ActorNetData)]{ 0 };
-		//	sendBuffer[0] = MSG_REP;
-
-		//	ActorNetData data = playerActor->toNetData();
-		//	memcpy(sendBuffer + 1, &data, sizeof(ActorNetData));
-		//	sock.sendData(sendBuffer, 1 + sizeof(ActorNetData), serverAddr);
-
-		}//~ FFU
 
 		readRecvBuffer();
 		glfwPollEvents();
@@ -986,12 +956,21 @@ void replicateState(ServerGameState& state)
 
 	if (storedInputRequests.size() == 0) return;
 
+
+	//~~~~~~~~~~~~~//
+	//~~ TESTING ~~//
+	//~~~~~~~~~~~~~//
+	int capacityBefore = storedInputRequests.capacity();
+	std::cout << "replicateState -- capacityBefore : " << capacityBefore << std::endl;
+
+
 	//-----------------------------------------------------//
 	//---- Popping older states than the one just ACKd ----//
 	//-----------------------------------------------------//
 	std::vector<ClientInputRequest*>::iterator reqItr = storedInputRequests.begin();
 	while (reqItr != storedInputRequests.end())
 	{
+		// If most recently acknowledge state, break
 		if ((*reqItr)->inputRequestID != state.acknowledgedRequestID)
 		{	
 			delete (*reqItr);
@@ -999,10 +978,29 @@ void replicateState(ServerGameState& state)
 			break;
 		}
 
+		// delete state
 		delete (*reqItr);
 		reqItr = storedInputRequests.erase(reqItr);
 	} 
+	storedInputRequests.shrink_to_fit();
 
+
+	//~~~~~~~~~~~~~//
+	//~~ TESTING ~~//
+	//~~~~~~~~~~~~~//
+	std::cout << "replicateState -- capacityAfter : " << storedInputRequests.capacity() << std::endl;
+	if (capacityBefore == storedInputRequests.capacity())
+	{
+		std::cout << "replicateState -- ERROR: failed to shrink storedInputRequests" << std::endl;
+
+		for (int i = 0; i < storedInputRequests.size(); i++)
+		{
+			std::cout << "    " << storedInputRequests[i]->inputRequestID << std::endl;
+		}
+
+		currentState = CS_Exit;
+		return;
+	}
 
 	//-------------------------------------------------------//
 	//---- Setting State of world to that of Acked State ----//

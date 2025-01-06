@@ -11,7 +11,7 @@
 
 
 /*
-* A circular buffer that stores GameState objects.
+
 */
 class CircularBuffer
 {

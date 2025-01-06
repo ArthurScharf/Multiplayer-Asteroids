@@ -167,7 +167,7 @@ using Time = std::chrono::steady_clock;
 using float_sec = std::chrono::duration<float>;
 using float_time_point = std::chrono::time_point<Time, float_sec>;
 
-float updatePeriod = 1.f / 20.f; // Verbose to allow easy editing. Should be properly declared later // 20.f
+float updatePeriod = 1.f / 30.f;
 float deltaTime = 0.f;
 float secondsSinceLastUpdate = 0.f;
 unsigned int stateSequenceID = 0;
