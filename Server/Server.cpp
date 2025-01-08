@@ -167,7 +167,7 @@ using Time = std::chrono::steady_clock;
 using float_sec = std::chrono::duration<float>;
 using float_time_point = std::chrono::time_point<Time, float_sec>;
 
-float updatePeriod = 1.f / 30.f;
+float tickPeriod = 1.f / 20.f;
 float deltaTime = 0.f;
 float secondsSinceLastUpdate = 0.f;
 unsigned int stateSequenceID = 0;
@@ -373,12 +373,12 @@ void playingGameLoop()
 		//----------------------------------//
 		//----- Fixed Frequency Update -----//
 		//----------------------------------//
-		if (secondsSinceLastUpdate >= updatePeriod) // ~20 times a second
+		if (secondsSinceLastUpdate >= tickPeriod) // ~20 times a second
 		{
 			// std::cout << "FFU / numActors: " << actors.size() << std::endl;
 
 
-			secondsSinceLastUpdate -= updatePeriod;
+			secondsSinceLastUpdate -= tickPeriod;
 			stateSequenceID++;
 
 			// -- Sending Snapshot to Clients -- //
@@ -412,8 +412,6 @@ void playingGameLoop()
 				handleInputRequest(batchedClientInputRequests.back());
 				batchedClientInputRequests.pop();
 			}
-
-
 
 
 			//--------------------------------------------//

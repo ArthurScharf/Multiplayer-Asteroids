@@ -108,7 +108,6 @@ bool bReadyButtonPressed = false;
 
 
 
-
 /* ---- Remote Procedure Calls ----
 
 KEY : Simulation Step
@@ -134,7 +133,7 @@ CircularBuffer stateBuffer; // TODO: The class needs reworking
 float deltaTime = 0.f;
 float lastFrame = 0.f;
 unsigned int stateSequenceID = 0;
-float tickPeriod = 1.f / 30.f;
+float tickPeriod = 1.f / 60.f;
 float elapsedTimeSinceUpdate = 0.f; // Seconds
 
 
@@ -333,11 +332,11 @@ void playingGameLoop()
 		//--------------------------------//
 		//---- Fixed Frequency Update ----//
 		//--------------------------------//
-		if (elapsedTimeSinceUpdate >= tickPeriod)
+		if (elapsedTimeSinceUpdate >= 1 / 60.f)
 		{	// Locking to 60 FPS
-			elapsedTimeSinceUpdate -= tickPeriod;
+			elapsedTimeSinceUpdate -= 1 / 60.f;
 
-			// -- Storing & Sending Input Data -- //
+			//-- Storing & Sending Input Data
 			ClientInputRequest* inputData = new ClientInputRequest();
 			inputData->inputRequestID = nextInputRequestID++; // Reminder that the increment will wrap this around
 			inputData->inputString = inputThisFrame;
@@ -350,7 +349,7 @@ void playingGameLoop()
 		//-- Moving Actors
 		moveActors(deltaTime);
 
-		// -- Rendering -- //
+		//-- Rendering
 		Render();
 
 		readRecvBuffer();
@@ -963,7 +962,6 @@ void replicateState(ServerGameState& state)
 	int capacityBefore = storedInputRequests.capacity();
 	std::cout << "replicateState -- capacityBefore : " << capacityBefore << std::endl;
 
-
 	//-----------------------------------------------------//
 	//---- Popping older states than the one just ACKd ----//
 	//-----------------------------------------------------//
@@ -971,7 +969,7 @@ void replicateState(ServerGameState& state)
 	while (reqItr != storedInputRequests.end())
 	{
 		// If most recently acknowledge state, break
-		if ((*reqItr)->inputRequestID != state.acknowledgedRequestID)
+		if ((*reqItr)->inputRequestID == state.acknowledgedRequestID)
 		{	
 			delete (*reqItr);
 			storedInputRequests.erase(reqItr);
@@ -1005,7 +1003,6 @@ void replicateState(ServerGameState& state)
 	//-------------------------------------------------------//
 	//---- Setting State of world to that of Acked State ----//
 	//-------------------------------------------------------//
-	std::cout << "replicateState(ServerGameState)" << std::endl;
 	ActorNetData* netData = state.actorNetData;
 	Actor* actor = nullptr;
 	for (int i = 0; i < state.numActors; i++)
@@ -1024,7 +1021,6 @@ void replicateState(ServerGameState& state)
 		}
 		else //-- Actor found. Updating Actor data
 		{
-			std::cout << "  " << "update[ " << netData->id << " ]" << std::endl;
 			auto actorItr = actorMap.find(netData->id);
 			actorItr->second->setPosition(netData->Position);
 			actorItr->second->setRotation(netData->Rotation);
