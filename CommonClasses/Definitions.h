@@ -59,7 +59,6 @@
 // -------------------- Message structs -------------------- //
 // --------------------------------------------------------- //
 
-
 /* -- MSG_REP, Client Creates --
 * 
 * Stores a frames input with that frames input request ID.

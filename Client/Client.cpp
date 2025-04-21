@@ -30,7 +30,6 @@
 
 
 
-
 #pragma comment(lib, "ws2_32.lib") // What is this doing?
 
 
@@ -46,7 +45,9 @@ GLFWwindow* window;
 Camera camera( glm::vec3(0.f, 0.f, 100.f) ); // Camera Position
 //Camera camera(0.f, 0.f, 100.f, 0.f, 1.f, 0.f, -90.f, 0.f);
 Shader* shader;
-bool bRenderingInitialized = false;
+// bool bRenderingInitialized = false; // I think this was used for debugging at one point
+
+
 
 
 // ----- Networking ----- //
@@ -102,8 +103,8 @@ std::map<unsigned int, Actor*> unlinkedProxies;
 
 
 // ----- Input ----- //
-bool bFireButtonPressed = false;
-bool bTestButtonPressed = false;
+bool bFireButtonPressed  = false;
+bool bTestButtonPressed  = false;
 bool bReadyButtonPressed = false;
 
 
@@ -118,7 +119,7 @@ Each value is a list of remote procedure calls to be made during a simulation st
 std::map<unsigned int, std::vector<std::function<void()>>> RemoteProcedureCalls;
 
 
-
+/* Used when exiting to close the main loop and exit the program */
 bool bRunMainLoop = true;
 
 
@@ -173,10 +174,14 @@ void cleanup();
 
 
 
+
+
+
 /*
 * CS_InitializingConnection : Allows user to specify server ip. Sends connect message and waits for reply before moving to next state
 * CS_WaitingForGameStart    : Allows user to send ready message. Cannot send ready message until client has controlled actor ID
-* 
+* CS_PlayingGame            : User sends input requests to the server, performs client-side prediction, client-reconciliation, and renders
+* CS_Exit					: Cleans up the program and exits
 */
 enum ClientState
 {
@@ -206,8 +211,9 @@ int main()
 		}
 		case CS_WaitingForGameStart:
 		{
-			if (!bRenderingInitialized)
-				initRendering();
+			//if (!bRenderingInitialized)
+			//	initRendering();
+			initRendering();
 			waitingForGameToStartLoop();
 			break;
 		}
@@ -927,22 +933,6 @@ void replicateState(char* buffer, int bufferLen)
 	{
 		// std::cout << "replicateState -- !clientState" << std::endl;
 	}
-
-
-
-	if ((clientState == state) == false)
-	{
-		// std::cout << "replicateState -- Not equivalent" << std::endl;
-	}
-
-
-	// TODO: Reconcile
-	return;
-	if (!stateBuffer.contains(state))
-	{
-		// TODO: Reconcile
-	}
-	delete state;
 }
 
 
@@ -954,13 +944,6 @@ void replicateState(ServerGameState& state)
 	lastServerGameState = state;
 
 	if (storedInputRequests.size() == 0) return;
-
-
-	//~~~~~~~~~~~~~//
-	//~~ TESTING ~~//
-	//~~~~~~~~~~~~~//
-	int capacityBefore = storedInputRequests.capacity();
-	std::cout << "replicateState -- capacityBefore : " << capacityBefore << std::endl;
 
 	//-----------------------------------------------------//
 	//---- Popping older states than the one just ACKd ----//
@@ -982,23 +965,6 @@ void replicateState(ServerGameState& state)
 	} 
 	storedInputRequests.shrink_to_fit();
 
-
-	//~~~~~~~~~~~~~//
-	//~~ TESTING ~~//
-	//~~~~~~~~~~~~~//
-	std::cout << "replicateState -- capacityAfter : " << storedInputRequests.capacity() << std::endl;
-	if (capacityBefore == storedInputRequests.capacity())
-	{
-		std::cout << "replicateState -- ERROR: failed to shrink storedInputRequests" << std::endl;
-
-		for (int i = 0; i < storedInputRequests.size(); i++)
-		{
-			std::cout << "    " << storedInputRequests[i]->inputRequestID << std::endl;
-		}
-
-		currentState = CS_Exit;
-		return;
-	}
 
 	//-------------------------------------------------------//
 	//---- Setting State of world to that of Acked State ----//
@@ -1037,7 +1003,6 @@ void replicateState(ServerGameState& state)
 		netData++;
 	}//~ Setting State of World
 
-	//std::cout << std::endl;
 
 	//-----------------------------------------------//
 	//---- Reappling all non-ACKd stored changes ----//

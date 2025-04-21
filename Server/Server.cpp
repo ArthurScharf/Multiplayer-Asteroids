@@ -191,8 +191,6 @@ enum ServerState
 	SS_PlayingGame,
 	SS_Exit
 };
-
-
 ServerState currentState = SS_WaitingForConnections;
 
 
@@ -323,6 +321,10 @@ void waitingForConnectionsLoop()
 
 void playingGameLoop()
 {
+	//-- TESTING
+	
+
+
 	std::chrono::steady_clock::time_point start = std::chrono::high_resolution_clock::now();
 	std::chrono::steady_clock::time_point end;
 
@@ -384,9 +386,6 @@ void playingGameLoop()
 			// -- Sending Snapshot to Clients -- //
 			if (clients.size() <= 0) return;
 
-
-
-
 			/* TODO
 			* [ ] 1. Update position of asteroids
 			* [x] 2. process `unprocessedClientRequests` queue.
@@ -401,8 +400,6 @@ void playingGameLoop()
 
 
 
-
-
 			//-------------------------------------//
 			//----- Processing Input Requests -----//
 			//-------------------------------------//
@@ -412,6 +409,7 @@ void playingGameLoop()
 				handleInputRequest(batchedClientInputRequests.back());
 				batchedClientInputRequests.pop();
 			}
+
 
 
 			//--------------------------------------------//
