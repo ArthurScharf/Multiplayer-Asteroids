@@ -10,10 +10,6 @@
 
 int UDPSocket::init(bool bIsServer)
 {
-	// -- 0. Initialize relevant variables -- //
-	UDPSocket::bufferSize = 256; // This is an arbitrary number. User should always set this themselves before using the socket
-
-
 	// -- 1. Load the DLL -- //
 	int error = 0;
 	WORD wVersionRequested = MAKEWORD(2, 2);
@@ -117,19 +113,19 @@ void UDPSocket::sendData(const char* buffer, unsigned int bufferLen, sockaddr_in
 
 
 
-/*
-* This code was written by a less experienced Arthur.
-* While it's useful to wrap the UDP socket, having the return value
-* of this function not be the return value of recvFrom channges things for
-* no obvious reason.
-*/
-char* UDPSocket::recvData(int& numBytesRead, sockaddr_in& sendingSockAddr)
+void UDPSocket::recvData(char* buffer, int numBytesReadable, int& numBytesRead, sockaddr_in& sendingSockAddr)
 {
-	numBytesRead = 0;
-	char* buffer = (char*)malloc(bufferSize); // BUG: This should allocate memory. the way it's used, it will fill up the processes OS memory
+	if (buffer == nullptr)
+	{
+		std::cout << "UDPSocket::recvData -- ERROR: passed uninitialized buffer" << std::endl;
+	}
+	if (numBytesReadable == 0)
+	{
+		std::cout << "UDPSocket::recvData -- ERROR: numBytesReadable == 0" << std::endl;
+	}
+
 	int sockAddr_len = sizeof(sendingSockAddr);
-	numBytesRead = recvfrom(sock, buffer, bufferSize, 0, (SOCKADDR*)&sendingSockAddr, &sockAddr_len);
-	return buffer;
+	numBytesRead = recvfrom(sock, buffer, numBytesRead, 0, (SOCKADDR*)&sendingSockAddr, &sockAddr_len);
 }
 
 

@@ -27,6 +27,13 @@
 */
 #define CLIENT_NETWORK_ID_MASK !((1 << 24) - 1)
 
+/*
+* Size of the network buffers used by client and server
+* 
+* I chose this value because I BELIEVE that no size of packet will ever exceed the this
+*/
+#define SIZE_OF_NETWORK_BUFFER 1 + sizeof(unsigned int) + (MAX_ACTORS * sizeof(ActorNetData))
+
 /* The input masks used to read the input bit-string sent by the client each frame, and read by the server */
 #define INPUT_UP    0b00000001
 #define INPUT_DOWN  0b00000010
@@ -49,7 +56,7 @@
 #define MSG_RPC		0x007		// Remote Procedure Call
 #define MSG_STRTGM  0x008		// Client --> Server : Client is ready to start game | Server --> Client, game has started
 
-#define RPC_SPAWN    0x001	
+#define RPC_SPAWN   0x001	
 
 
 

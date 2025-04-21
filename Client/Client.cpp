@@ -49,8 +49,8 @@ bool bRenderingInitialized = false;
 UDPSocket sock;
 sockaddr_in serverAddr;
 bool bIsConnectedToServer = false;
-char sendBuffer[1 + (MAX_ACTORS * sizeof(Actor))];
-char* recvBuffer{};
+char sendBuffer[SIZE_OF_NETWORK_BUFFER]{};
+char recvBuffer[SIZE_OF_NETWORK_BUFFER]{};
 int numBytesRead = -1; // TODO: This might be a duplicate of another variable
 const unsigned int NUM_PACKETS_PER_CYCLE = 10; // 10
 
@@ -232,7 +232,6 @@ void initiateConnectionLoop() // char* sendBuffer, char* recvBuffer, int& numByt
 {
 	// ---- Establishing Connection ---- //
 	sock.init(false);
-	sock.setRecvBufferSize(2000); // TODO: Arbitrary. Should be chosen more intelligently
 	/* Properly formatting received IP address string and placing it in sockaddr_in struct */
 	serverAddr.sin_family = AF_INET;
 
@@ -255,7 +254,7 @@ void initiateConnectionLoop() // char* sendBuffer, char* recvBuffer, int& numByt
 			Sleep(500); 
 
 			// -- Receiving server reply -- //
-			recvBuffer = sock.recvData(numBytesRead, serverAddr);
+			sock.recvData(recvBuffer, SIZE_OF_NETWORK_BUFFER, numBytesRead, serverAddr);
 			if (numBytesRead > 0)
 			{
 				if (handleMessage(recvBuffer, numBytesRead) == MSG_CONNECT) return;
@@ -280,9 +279,9 @@ void waitingForGameToStartLoop()
 		glfwSwapBuffers(window);
 
 		// -- Receiving Messages -- //
-		recvBuffer = sock.recvData(numBytesRead, serverAddr);
-		if (numBytesRead == 0) continue;
-		handleMessage(recvBuffer, numBytesRead);
+		sock.recvData(recvBuffer, SIZE_OF_NETWORK_BUFFER, numBytesRead, serverAddr);
+		if (numBytesRead != 0) 
+			handleMessage(recvBuffer, numBytesRead);
 	}//~ while
 }
 
@@ -634,13 +633,14 @@ void readRecvBuffer()
 	// std::cout << "readReceiveBuffer" << std::endl;
 	
 	// ----  Receiving Data from Server ----  // Receives data from server regardless of state.
-	char* tempBuffer{};
+	//char tempBuffer[SIZE_OF_NETWORK_BUFFER]{};
+	char* tempBuffer = nullptr;
 	int recvBufferLen = 0;
 	int tempBufferLen = 0;
 	sockaddr_in recvAddr; // This is never used on purpose. Code smell
 	for (int i = 0; i < NUM_PACKETS_PER_CYCLE; i++)
 	{
-		tempBuffer = sock.recvData(tempBufferLen, recvAddr);
+		sock.recvData(tempBuffer, SIZE_OF_NETWORK_BUFFER, numBytesRead, recvAddr);
 
 		/* NOTE: For some reason, this block of code will a bug in replication.
 		*  If this block is implemented, the client won't create any new actors, suggesting
@@ -663,16 +663,15 @@ void readRecvBuffer()
 			// std::cout << "!MSG_REP" << std::endl;
 			// std::cout << *tempBuffer << " / " << tempBufferLen << std::endl;
 			handleMessage(tempBuffer, tempBufferLen);
-			continue;
+		} else {
+			// Update the values for the most recently seen replication data which is stored in the recvBuffer
+			memcpy(recvBuffer, tempBuffer, numBytesRead);
+			recvBufferLen = tempBufferLen;
 		}
-
-		// Update the values for the most recently seen replication data which is stored in the recvBuffer
-		recvBuffer = tempBuffer;
-		recvBufferLen = tempBufferLen;
 	}
 
 
-	// Handle the most recently seen replication message within the most recently read NUM_PACKETS_PER_CYCLE messages
+	// Handle the most recently seen replication message IF IT EXISTS, within the most recently read NUM_PACKETS_PER_CYCLE messages
 	if (recvBufferLen > 0)
 	{
 		// std::cout << "readRecvBuffer / " << (tempBufferLen / sizeof(ActorNetData)) << std::endl;

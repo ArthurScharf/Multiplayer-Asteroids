@@ -25,12 +25,18 @@
 
 
 UDPSocket sock;
-// I doubt any other kind of message will exceed the size of this type of message
-char sendBuffer[1 + sizeof(unsigned int) + (MAX_ACTORS * sizeof(ActorNetData))]{};
-char* recvBuffer{};
+/*
+* The sending and receiving arrays for the program. These are declared here to be on the `data` section of the processes memory
+* because they are allocated for the programs lifetime
+* 
+* I doubt any other kind of message will exceed the size of this type of message
+*/
+char sendBuffer[SIZE_OF_NETWORK_BUFFER]{}; 
+char recvBuffer[SIZE_OF_NETWORK_BUFFER]{};
 // Stores the internet address for the currently being processed client
 sockaddr_in clientAddr;
 int clientAddr_len = sizeof(clientAddr);
+// A constant for processing packets per a cycle of the main loop. Value is guessed-and-checked
 const unsigned int NUM_PACKETS_PER_CYCLE = 10;
 
 
@@ -180,9 +186,11 @@ int main()
 {
 	// -- Winsock Initialization -- //
 	sock.init(true);
-	sock.setRecvBufferSize(2000); // TODO: Arbitrary. Should be chosen more intelligently
 	clientAddr.sin_family = AF_INET;
 	clientAddr.sin_port = htons(4242);
+	
+	
+	// -- Program Specific Initialization -- //
 	bool bRunMainLoop = true;
 
 
@@ -235,7 +243,7 @@ void waitingForConnectionsLoop()
 	{
 		// -- Message Handling -- //
 		int numBytesRead;
-		recvBuffer = sock.recvData(numBytesRead, clientAddr);
+		sock.recvData(recvBuffer, SIZE_OF_NETWORK_BUFFER, numBytesRead, clientAddr);
 		if (numBytesRead > 0)
 		{
 			handleMessage(recvBuffer, numBytesRead);
@@ -522,13 +530,13 @@ void checkForCollisions()
 void readRecvBuffer()
 {
 	// ----  Receiving Data from Clients ----  //
-	int recvBufferLen = 0;
+	int numBytesRead = 0;
 	sockaddr_in recvAddr; // This is never used on purpose. Code smell
 	for (int i = 0; i < NUM_PACKETS_PER_CYCLE; i++)
 	{
-		
-		recvBuffer = sock.recvData(recvBufferLen, clientAddr);
-		handleMessage(recvBuffer, recvBufferLen);
+		sock.recvData(recvBuffer, SIZE_OF_NETWORK_BUFFER, numBytesRead, clientAddr);
+		if (numBytesRead != 0)
+			handleMessage(recvBuffer, numBytesRead);
 	}
 }
 
