@@ -14,14 +14,8 @@
 #include "../CommonClasses/UDPSocket.h"
 
 
-
-
-
-
 // Linking (What does this have to do with linking????
 #pragma comment(lib, "ws2_32.lib")
-
-
 
 
 UDPSocket sock;
@@ -242,14 +236,14 @@ void waitingForConnectionsLoop()
 	while (currentState == SS_WaitingForConnections)
 	{
 		// -- Message Handling -- //
-		int numBytesRead;
-		sock.recvData(recvBuffer, SIZE_OF_NETWORK_BUFFER, numBytesRead, clientAddr);
+		int numBytesRead = sock.recvData(recvBuffer, 256, clientAddr);
 		if (numBytesRead > 0)
 		{
+			std::cout << numBytesRead << std::endl;
 			handleMessage(recvBuffer, numBytesRead);
 		}
 		
-		// -- Start Game Timer -- //
+		// -- Start-Game Timer -- //
 		if (bRunningStartGameTimer)
 		{
 			float currentSeconds = (getCurrentTime() - startTime).count(); // Seconds difference between start of epoch and now
@@ -281,6 +275,19 @@ void waitingForConnectionsLoop()
 
 	}//~ Loop
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 void playingGameLoop()
@@ -534,7 +541,7 @@ void readRecvBuffer()
 	sockaddr_in recvAddr; // This is never used on purpose. Code smell
 	for (int i = 0; i < NUM_PACKETS_PER_CYCLE; i++)
 	{
-		sock.recvData(recvBuffer, SIZE_OF_NETWORK_BUFFER, numBytesRead, clientAddr);
+		numBytesRead = sock.recvData(recvBuffer, SIZE_OF_NETWORK_BUFFER, clientAddr);
 		if (numBytesRead != 0)
 			handleMessage(recvBuffer, numBytesRead);
 	}
@@ -543,6 +550,7 @@ void readRecvBuffer()
 
 void handleMessage(char* buffer, unsigned int bufferLen)
 {
+	std::cout << "handleMessage" << std::endl;
 	Client client;
 	client._in_addr = clientAddr.sin_addr;
 	switch (recvBuffer[0]) // Instruction Received

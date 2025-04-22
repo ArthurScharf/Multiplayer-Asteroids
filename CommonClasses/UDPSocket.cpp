@@ -101,31 +101,27 @@ int UDPSocket::init(bool bIsServer)
 
 
 
-void UDPSocket::sendData(const char* buffer, unsigned int bufferLen, sockaddr_in& recvAddr)
+int UDPSocket::sendData(const char* buffer, unsigned int bufferLen, sockaddr_in& recvAddr)
 {
 	if (buffer[0] == MSG_RPC)
 	{
 		std::cout << "UDPSocket::sendData" << std::endl;
 	}
-	int bytesSent = sendto(sock, buffer, bufferLen, 0, (sockaddr*)&recvAddr, sizeof recvAddr);	
+	return sendto(sock, buffer, bufferLen, 0, (sockaddr*)&recvAddr, sizeof recvAddr);	
 }
 
 
 
 
-void UDPSocket::recvData(char* buffer, int numBytesReadable, int& numBytesRead, sockaddr_in& sendingSockAddr)
+int UDPSocket::recvData(char* buffer, int numBytesReadable, sockaddr_in& sendingSockAddr)
 {
 	if (buffer == nullptr)
 	{
 		std::cout << "UDPSocket::recvData -- ERROR: passed uninitialized buffer" << std::endl;
 	}
-	if (numBytesReadable == 0)
-	{
-		std::cout << "UDPSocket::recvData -- ERROR: numBytesReadable == 0" << std::endl;
-	}
 
 	int sockAddr_len = sizeof(sendingSockAddr);
-	numBytesRead = recvfrom(sock, buffer, numBytesRead, 0, (SOCKADDR*)&sendingSockAddr, &sockAddr_len);
+	return recvfrom(sock, buffer, numBytesReadable, 0, (SOCKADDR*)&sendingSockAddr, &sockAddr_len);
 }
 
 

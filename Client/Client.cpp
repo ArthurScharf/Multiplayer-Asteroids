@@ -48,9 +48,9 @@ bool bRenderingInitialized = false;
 UDPSocket sock;
 sockaddr_in serverAddr;
 bool bIsConnectedToServer = false;
-char sendBuffer[SIZE_OF_NETWORK_BUFFER]{};
+char sendBuffer[SIZE_OF_NETWORK_BUFFER]{}; // 
 char recvBuffer[SIZE_OF_NETWORK_BUFFER]{};
-int numBytesRead = -1; // TODO: This might be a duplicate of another variable
+int numBytesRead = -1;
 const unsigned int NUM_PACKETS_PER_CYCLE = 10; // 10
 
 /*
@@ -143,7 +143,7 @@ void playingGameLoop();
 // Initializes rendering for program, including creating a window
 int initRendering(); 
 /* Renders the game to the window */
-void Render();
+void render();
 
 void processInput(GLFWwindow* window);
 void spawnProjectile();
@@ -248,12 +248,12 @@ void initiateConnectionLoop() // char* sendBuffer, char* recvBuffer, int& numByt
 		{
 			// -- Sending connect message -- //
 			sendBuffer[0] = MSG_CONNECT;
-			sock.sendData(sendBuffer, 1, serverAddr);
+			int bytesSent = sock.sendData(sendBuffer, 1, serverAddr);
 			
 			Sleep(500); 
 
 			// -- Receiving server reply -- //
-			sock.recvData(recvBuffer, SIZE_OF_NETWORK_BUFFER, numBytesRead, serverAddr);
+			numBytesRead = sock.recvData(recvBuffer, SIZE_OF_NETWORK_BUFFER, serverAddr);
 			if (numBytesRead > 0)
 			{
 				if (handleMessage(recvBuffer, numBytesRead) == MSG_CONNECT) return;
@@ -271,14 +271,14 @@ void waitingForGameToStartLoop()
 		// Can send MSG_STRTGM to server
 		processInput(window);
 
-		Render();
+		render();
 
 		// -- Polling Events & Swapping Buffers -- //
 		glfwPollEvents();
 		glfwSwapBuffers(window);
 
 		// -- Receiving Messages -- //
-		sock.recvData(recvBuffer, SIZE_OF_NETWORK_BUFFER, numBytesRead, serverAddr);
+		numBytesRead = sock.recvData(recvBuffer, SIZE_OF_NETWORK_BUFFER, serverAddr);
 		if (numBytesRead != 0) 
 			handleMessage(recvBuffer, numBytesRead);
 	}//~ while
@@ -302,7 +302,7 @@ void playingGameLoop()
 		processInput(window);
 		// moveActors(deltaTime); TEST
 
-		Render();
+		render();
 
 
 		// ---- Fixed Frequency Update ---- //
@@ -384,7 +384,7 @@ int initRendering()
 }
 
 
-void Render()
+void render()
 {
 	// ---- Rendering Actors ---- //
 	glClearColor(0.1f, 0.1f, 0.1f, 1.f);
@@ -633,49 +633,40 @@ void readRecvBuffer()
 	
 	// ----  Receiving Data from Server ----  // Receives data from server regardless of state.
 	//char tempBuffer[SIZE_OF_NETWORK_BUFFER]{};
-	char* tempBuffer = nullptr;
-	int recvBufferLen = 0;
-	int tempBufferLen = 0;
+	char* tempBuffer = new char[SIZE_OF_NETWORK_BUFFER];
+	*tempBuffer = 0; // Initialize first byte so the we don't accidentally read a message that doesn't exist
+	int numBytesReadForLastReplication = 0;
 	sockaddr_in recvAddr; // This is never used on purpose. Code smell
 	for (int i = 0; i < NUM_PACKETS_PER_CYCLE; i++)
 	{
-		sock.recvData(tempBuffer, SIZE_OF_NETWORK_BUFFER, numBytesRead, recvAddr);
+		numBytesRead = sock.recvData(tempBuffer, SIZE_OF_NETWORK_BUFFER, recvAddr);
 
-		/* NOTE: For some reason, this block of code will a bug in replication.
-		*  If this block is implemented, the client won't create any new actors, suggesting
-		*  this block of code permits the discarding of messages we don't want ignored
-		*/
-		//if (tempBufferLen == -1)
-		//{
-		//	/*
-		//	* Returns -1 because we've set the socket to non-blocking.
-		//	* The error returned will be
-		//	* WSAEWOULDBLOCK, which is an error code reserved for notifying that things are working as they should be
-		//	*/
-		//	return;
-		//}
+		if (numBytesRead == -1)
+		{
+			return;
+		}
 		
 
 		// Not a replication message --> Handle right away
-		if (*tempBuffer != MSG_REP)
+		if (*tempBuffer == MSG_REP)
 		{
 			// std::cout << "!MSG_REP" << std::endl;
 			// std::cout << *tempBuffer << " / " << tempBufferLen << std::endl;
-			handleMessage(tempBuffer, tempBufferLen);
+			handleMessage(tempBuffer, numBytesRead);
 		} else {
 			// Update the values for the most recently seen replication data which is stored in the recvBuffer
 			memcpy(recvBuffer, tempBuffer, numBytesRead);
-			recvBufferLen = tempBufferLen;
+			numBytesReadForLastReplication = numBytesRead;
 		}
 	}
-
+	delete[] tempBuffer;
 
 	// Handle the most recently seen replication message IF IT EXISTS, within the most recently read NUM_PACKETS_PER_CYCLE messages
-	if (recvBufferLen > 0)
+	if (numBytesReadForLastReplication > 0)
 	{
 		// std::cout << "readRecvBuffer / " << (tempBufferLen / sizeof(ActorNetData)) << std::endl;
 		// std::cout << *tempBuffer << " / " << tempBufferLen << std::endl;
-		handleMessage(recvBuffer, recvBufferLen);
+		handleMessage(recvBuffer, numBytesReadForLastReplication);
 	}
 }
 
