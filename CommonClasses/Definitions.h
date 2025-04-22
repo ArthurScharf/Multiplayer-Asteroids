@@ -67,14 +67,15 @@
 /* -- MSG_REP, Server Creates --
 * Stores the net relevant data for each actor (ActorNetData) that needs to be replicated
 */
-struct GameState
-{
-private:
-	char messageType = MSG_REP;
-public:
-	/* Contiguous actor data. Read using the size of ActorNetData */
-	char data[MAX_ACTORS * sizeof(ActorNetData)];
-};
+//struct GameState
+//{
+//private:
+//	char messageType = MSG_REP;
+//public:
+//	/* Contiguous actor data. Read using the size of ActorNetData */
+//	char data[MAX_ACTORS * sizeof(ActorNetData)];
+//};
+
 
 /* -- MSG_REP, Client Creates --
 * Stores a frames input with that frames input request ID.
