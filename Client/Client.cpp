@@ -260,6 +260,7 @@ void initiateConnectionLoop() // char* sendBuffer, char* recvBuffer, int& numByt
 			{
 				if (handleMessage(recvBuffer, numBytesRead) == MSG_CONNECT) return;
 			}
+			free(recvBuffer);
 		}//~ for i
 	}//~ While
 }
@@ -283,6 +284,7 @@ void waitingForGameToStartLoop()
 		recvBuffer = sock.recvData(numBytesRead, serverAddr);
 		if (numBytesRead == 0) continue;
 		handleMessage(recvBuffer, numBytesRead);
+		free(recvBuffer);
 	}//~ while
 }
 
@@ -669,6 +671,7 @@ void readRecvBuffer()
 		// Update the values for the most recently seen replication data which is stored in the recvBuffer
 		recvBuffer = tempBuffer;
 		recvBufferLen = tempBufferLen;
+		free(tempBuffer);
 	}
 
 
